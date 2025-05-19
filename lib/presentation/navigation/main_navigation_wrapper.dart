@@ -15,9 +15,9 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const HomeScreen(),
-    const ButterflyCountForm(), // New
-    const MyCountsScreen(), // New
+    HomeScreen(),
+    const ButterflyCountForm(),
+    const MyCountsScreen(),
     const SettingsScreen(),
   ];
 
@@ -30,12 +30,18 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         onTap: (index) => setState(() => _currentIndex = index),
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle),
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add),
             label: 'New Count',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'My Counts'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list),
+            label: 'My Counts',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
