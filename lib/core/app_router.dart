@@ -1,14 +1,19 @@
-GoRouter(
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+final router = GoRouter(
   routes: [
-    GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
-    GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
     GoRoute(
-      path: '/count/new',
-      builder: (_, __) => const ButterflyCountForm(),
+      path: '/',
+      builder: (context, state) => const Scaffold(body: Center(child: Text('Home'))),
     ),
     GoRoute(
-      path: '/count/mine',
-      builder: (_, __) => const MyCountsScreen(),
+      path: '/new-count',
+      builder: (context, state) => const Scaffold(body: Center(child: Text('New Count'))),
+    ),
+    GoRoute(
+      path: '/my-counts',
+      builder: (context, state) => const Scaffold(body: Center(child: Text('My Counts'))),
     ),
   ],
-)
+);
