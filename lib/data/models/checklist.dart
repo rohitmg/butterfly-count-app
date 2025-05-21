@@ -14,8 +14,8 @@ class Checklist {
   @HiveField(6) final double? altitude;
   @HiveField(7) final double? accuracy;
   @HiveField(8) final DateTime date;
-  @HiveField(9) final String startTime;
-  @HiveField(10) final String endTime;
+  @HiveField(9) final DateTime startTime;
+  @HiveField(10) final DateTime endTime;
   @HiveField(11) final String weather;
   @HiveField(12) final String? comments;
   @HiveField(13) final bool isOpenAccess;

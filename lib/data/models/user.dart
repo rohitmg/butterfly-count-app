@@ -1,26 +1,24 @@
 import 'package:hive/hive.dart';
 
-part 'app_user.g.dart';
+part 'user.g.dart';
 
 @HiveType(typeId: 3)
-class AppUser {
+class User {
   @HiveField(0) final String firebaseId;
   @HiveField(1) final String name;
   @HiveField(2) final String email;
   @HiveField(3) final String? photoUrl;
   @HiveField(4) final bool darkMode;
   @HiveField(5) final bool shareOpenAccess;
-  @HiveField(6) final String language;
   @HiveField(7) final DateTime? lastSync;
 
-  AppUser({
+  User({
     required this.firebaseId,
     required this.name,
     required this.email,
     this.photoUrl,
     this.darkMode = false,
     this.shareOpenAccess = false,
-    this.language = 'en',
     this.lastSync,
   });
 }
