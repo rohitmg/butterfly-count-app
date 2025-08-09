@@ -1,3 +1,12 @@
+plugins {
+    id("com.android.application") version "8.7.0" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.23" apply false
+    id("dev.flutter.flutter-gradle-plugin") version "1.0.0" apply false
+
+    // Google Services plugin is correct
+    id("com.google.gms.google-services") version "4.4.3" apply false
+}
+
 allprojects {
     repositories {
         google()
@@ -5,6 +14,7 @@ allprojects {
     }
 }
 
+// These are custom configurations and are kept as is.
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
