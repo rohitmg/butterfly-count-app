@@ -8,8 +8,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
 // your imports…
-import 'package:butterfly_count/data/models/checklist.dart';
-import 'package:butterfly_count/data/models/observation.dart';
+import 'package:butterfly_counts/data/models/checklist.dart';
+import 'package:butterfly_counts/data/models/observation.dart';
 
 class ButterflyCountForm extends ConsumerStatefulWidget {
   const ButterflyCountForm({Key? key}) : super(key: key);

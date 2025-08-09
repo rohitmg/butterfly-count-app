@@ -1,4 +1,4 @@
-package `in`.bigbutterflymonth.butterfly_count
+package `in`.bigbutterflymonth.butterfly_counts
 
 import io.flutter.embedding.android.FlutterActivity
 
