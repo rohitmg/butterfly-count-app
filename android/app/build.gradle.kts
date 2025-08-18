@@ -8,10 +8,9 @@ plugins {
 }
 
 android {
-    // Ensure this matches your package name and folder structure
-    namespace = "in.bigbutterflymonth.butterfly_counts"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    namespace = "com.bigbutterflymonth.butterfly_count"
+    compileSdk = 34
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -24,8 +23,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        // This MUST match the 'namespace' and the package name in MainActivity.kt
-        applicationId = "in.bigbutterflymonth.butterfly_counts"
+        applicationId = "com.bigbutterflymonth.butterfly_count"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

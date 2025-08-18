@@ -1,40 +1,55 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';  // Add this import
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:butterfly_counts/providers/api_providers.dart'; // Import your API providers
+import 'package:firebase_auth/firebase_auth.dart'; // To check if user is logged in
 
-
-class HomeScreen extends ConsumerWidget {  // Changed from StatelessWidget
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    
+
+    // Watch the userProfileProvider
+    final userProfileAsyncValue = ref.watch(userProfileProvider);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header 
-          _buildWelcomeHeader(),
+          // Header - now dynamic
+          userProfileAsyncValue.when(
+            data: (userProfile) => _buildWelcomeHeader(userProfile['name']),
+            loading: () => _buildWelcomeHeader('Loading...'),
+            error: (err, stack) {
+              // Check if the error is due to not being logged in
+              if (err.toString().contains('User not logged in')) {
+                return _buildWelcomeHeader('Welcome!'); // Or prompt login
+              }
+              return _buildWelcomeHeader('Error loading user'); // Display error
+            },
+          ),
           const SizedBox(height: 24),
-          
-          // Stats Cards
+
+          // Stats Cards - will be dynamic later
           _buildStatsRow(),
           const SizedBox(height: 24),
-          
-          // Recent Activity
+
+          // Recent Activity - will be dynamic later
           _buildRecentActivity(theme),
         ],
       ),
     );
   }
 
-  Widget _buildWelcomeHeader() {
+  // Modified to accept a name
+  Widget _buildWelcomeHeader(String userName) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Welcome back!', 
-          style: TextStyle(
+        Text('Welcome back, $userName!',
+          style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
           )),
@@ -111,7 +126,7 @@ class StatCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, 
+            Text(title,
               style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(value,
