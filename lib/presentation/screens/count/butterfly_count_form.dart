@@ -6,13 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // For getting current user UID
+import 'package:firebase_auth/firebase_auth.dart';
 
 // your imports…
 import 'package:butterfly_counts/data/models/count_model.dart'; // Renamed from checklist.dart
 import 'package:butterfly_counts/data/models/observation.dart';
 import 'package:butterfly_counts/data/models/taxa.dart'; // New import for taxa lookup
-import 'package:butterfly_counts/providers/api_providers.dart'; // For API calls and taxa list
+import 'package:butterfly_counts/providers/api_providers.dart';
 
 class ButterflyCountForm extends ConsumerStatefulWidget {
   const ButterflyCountForm({Key? key}) : super(key: key);
@@ -34,14 +34,13 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
 
   double? latitude, longitude, altitude, accuracy;
   String weather = 'Sunny';
-  String? comments; // Corresponds to 'notes' in CountModel
+  String? comments;
 
   final List<Observation> observations = [];
 
   /// Timer for checklist page
   Timer? _timer;
   Duration _elapsed = Duration.zero;
-  // static const Duration _testThreshold = Duration(seconds: 10); // Removed, not used
 
   // Controllers for text fields to pre-fill with current location
   final TextEditingController _latitudeController = TextEditingController();
@@ -49,7 +48,6 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   final TextEditingController _altitudeController = TextEditingController();
   final TextEditingController _accuracyController = TextEditingController();
   final TextEditingController _placeNameController = TextEditingController();
-  final TextEditingController _speciesNameController = TextEditingController(); // For add observation dialog
 
   @override
   void initState() {
@@ -87,14 +85,16 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     _altitudeController.dispose();
     _accuracyController.dispose();
     _placeNameController.dispose();
-    _speciesNameController.dispose();
     super.dispose();
   }
 
   void _goToPage(int i) {
     if (i == 2 && (latitude == null || longitude == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please set location first')),
+        const SnackBar(
+          content: Text('Please set location first'),
+          behavior: SnackBarBehavior.floating, // Use floating behavior
+        ),
       );
       return;
     }
@@ -106,7 +106,6 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
-  // Modified _getLocation to update controllers
   Future<void> _getLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -122,10 +121,17 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
         _altitudeController.text = altitude!.toStringAsFixed(2);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location updated!')),
+        const SnackBar(
+          content: Text('Location updated!'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } catch (e) {
-      if (kDebugMode && (kIsWeb || Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      if (kDebugMode &&
+          (kIsWeb ||
+              Platform.isWindows ||
+              Platform.isLinux ||
+              Platform.isMacOS)) {
         setState(() {
           latitude = 28.6139; // Default to Delhi for debug
           longitude = 77.2090; // Default to Delhi for debug
@@ -141,45 +147,54 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             content: Text(
               'Geolocation not supported/failed. Using demo coordinates (Delhi).',
             ),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error getting location: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
   }
 
-  // NEW: Function to handle form submission
   Future<void> _submitForm() async {
     final countSubmissionNotifier = ref.read(countSubmissionProvider.notifier);
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be logged in to submit a count.')),
+        const SnackBar(
+          content: Text('You must be logged in to submit a count.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (latitude == null || longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please set a valid location before submitting.')),
+        const SnackBar(
+          content: Text('Please set a valid location before submitting.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (observations.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one observation.')),
+        const SnackBar(
+          content: Text('Please add at least one observation.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
-    // Ensure end time is set
     endTime ??= DateTime.now();
 
     final countData = CountModel(
@@ -193,14 +208,15 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       longitude: longitude!,
       altitude: altitude,
       accuracy: accuracy,
-      placeName: _placeNameController.text.isNotEmpty ? _placeNameController.text : null,
-      distanceCovered: null, // Not collected in UI yet
+      placeName: _placeNameController.text.isNotEmpty
+          ? _placeNameController.text
+          : null,
+      distanceCovered: null,
       weather: weather,
       notes: comments,
-      version: '1.0.0', // Hardcode for now
+      version: '1.0.0',
     );
 
-    // Call the submission provider
     await countSubmissionNotifier.submitCountAndObservations(
       countData: countData,
       observationsData: observations,
@@ -216,23 +232,25 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     final inactiveColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final disabledColor = Theme.of(context).disabledColor;
 
-    // Watch the submission state
     final submissionState = ref.watch(countSubmissionProvider);
 
-    // Listen for submission success/error
     ref.listen<AsyncValue<int?>>(countSubmissionProvider, (previous, next) {
       next.whenOrNull(
         data: (countId) {
           if (countId != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Count submitted successfully! ID: $countId')),
+              SnackBar(
+                  content: Text('Count submitted successfully! ID: $countId'),
+                  behavior: SnackBarBehavior.floating),
             );
-            Navigator.pop(context); // Go back after successful submission
+            Navigator.pop(context);
           }
         },
         error: (err, stack) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Submission failed: ${err.toString()}')),
+            SnackBar(
+                content: Text('Submission failed: ${err.toString()}'),
+                behavior: SnackBarBehavior.floating),
           );
         },
       );
@@ -245,9 +263,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           if (_currentPage == 2)
             IconButton(
               icon: submissionState.isLoading
-                  ? const CircularProgressIndicator(color: Colors.white) // Show loading spinner
+                  ? const CircularProgressIndicator(color: Colors.white)
                   : const Icon(Icons.check),
-              onPressed: submissionState.isLoading ? null : _submitForm, // Disable button while loading
+              onPressed: submissionState.isLoading ? null : _submitForm,
             ),
         ],
       ),
@@ -262,7 +280,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               children: [
                 _buildBasicInfoPage(),
                 _buildLocationPage(),
-                _buildChecklistPage(),
+                _buildChecklistPage(submissionState),
               ],
             ),
           ),
@@ -300,7 +318,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
-   Widget _buildBottomTab(
+  Widget _buildBottomTab(
     String label,
     int index,
     Color active,
@@ -309,16 +327,22 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     bool locked = false,
   }) {
     final selected = index == _currentPage;
-    final color =
-        locked
-            ? disabled
-            : selected
-            ? active
-            : inactive;
+    final color = locked ? disabled : (selected ? active : inactive);
 
     return Expanded(
       child: InkWell(
-        onTap: () => _goToPage(index),
+        onTap: () {
+          if (!locked) {
+            _goToPage(index);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please set location first'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           color: color.withOpacity(selected ? 0.15 : 0.05),
@@ -326,7 +350,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (locked) ...[
-                const Icon(Icons.lock_outline, size: 16),
+                const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
                 const SizedBox(width: 4),
               ],
               Text(
@@ -372,13 +396,19 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                 setState(() {
                   selectedDate = picked;
                   startTime = DateTime(
-                    picked.year, picked.month, picked.day,
-                    startTime.hour, startTime.minute,
+                    picked.year,
+                    picked.month,
+                    picked.day,
+                    startTime.hour,
+                    startTime.minute,
                   );
                   if (endTime != null) {
                     endTime = DateTime(
-                      picked.year, picked.month, picked.day,
-                      endTime!.hour, endTime!.minute,
+                      picked.year,
+                      picked.month,
+                      picked.day,
+                      endTime!.hour,
+                      endTime!.minute,
                     );
                   }
                 });
@@ -398,8 +428,11 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               if (time != null) {
                 setState(() {
                   startTime = DateTime(
-                    selectedDate.year, selectedDate.month, selectedDate.day,
-                    time.hour, time.minute,
+                    selectedDate.year,
+                    selectedDate.month,
+                    selectedDate.day,
+                    time.hour,
+                    time.minute,
                   );
                   if (endTime != null && !endTime!.isAfter(startTime)) {
                     endTime = startTime.add(const Duration(hours: 1));
@@ -418,17 +451,19 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             onTap: () async {
               final time = await showTimePicker(
                 context: context,
-                initialTime:
-                    endTime != null
-                        ? TimeOfDay.fromDateTime(endTime!)
-                        : TimeOfDay.fromDateTime(
-                          startTime.add(const Duration(hours: 1)),
-                        ),
+                initialTime: endTime != null
+                    ? TimeOfDay.fromDateTime(endTime!)
+                    : TimeOfDay.fromDateTime(
+                        startTime.add(const Duration(hours: 1)),
+                      ),
               );
               if (time != null) {
                 final newEndTime = DateTime(
-                  selectedDate.year, selectedDate.month, selectedDate.day,
-                  time.hour, time.minute,
+                  selectedDate.year,
+                  selectedDate.month,
+                  selectedDate.day,
+                  time.hour,
+                  time.minute,
                 );
                 if (newEndTime.isAfter(startTime)) {
                   setState(() => endTime = newEndTime);
@@ -436,6 +471,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('End time must be after start time'),
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
@@ -468,14 +504,14 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           ElevatedButton.icon(
             icon: const Icon(Icons.my_location),
             label: const Text('Use Current Location'),
-            onPressed: _getLocation, // Use the _getLocation method
+            onPressed: _getLocation,
           ),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: TextFormField(
-                  controller: _latitudeController, // Use controller
+                  controller: _latitudeController,
                   decoration: const InputDecoration(
                     labelText: 'Latitude',
                     border: OutlineInputBorder(),
@@ -487,7 +523,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
-                  controller: _longitudeController, // Use controller
+                  controller: _longitudeController,
                   decoration: const InputDecoration(
                     labelText: 'Longitude',
                     border: OutlineInputBorder(),
@@ -503,7 +539,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             children: [
               Expanded(
                 child: TextFormField(
-                  controller: _altitudeController, // Use controller
+                  controller: _altitudeController,
                   decoration: const InputDecoration(
                     labelText: 'Altitude (m)',
                     border: OutlineInputBorder(),
@@ -515,7 +551,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
-                  controller: _accuracyController, // Use controller
+                  controller: _accuracyController,
                   decoration: const InputDecoration(
                     labelText: 'Accuracy (m)',
                     border: OutlineInputBorder(),
@@ -528,12 +564,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           ),
           const SizedBox(height: 16),
           TextFormField(
-            controller: _placeNameController, // Use controller
+            controller: _placeNameController,
             decoration: const InputDecoration(
               labelText: 'Place Name (Optional)',
               border: OutlineInputBorder(),
             ),
-            onChanged: (value) => _placeNameController.text = value, // Update controller text
+            onChanged: (value) => _placeNameController.text = value,
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
@@ -562,10 +598,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
-  Widget _buildChecklistPage() {
-    final elapsedText = _elapsed.toString().split('.').first; // hh:mm:ss
+  Widget _buildChecklistPage(AsyncValue<int?> submissionState) {
+    final elapsedText = _elapsed.toString().split('.').first;
 
-    // Calculate stats for checklist page
     final int totalIndividualsObserved = observations.fold<int>(0, (s, o) => s + o.individuals);
     final int uniqueSpeciesObserved = observations.map((o) => o.taxaId).toSet().length;
 
@@ -605,7 +640,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                         IconButton(
                           icon: const Icon(Icons.delete),
                           onPressed: () => setState(() {
-                            observations.removeWhere((o) => o.id == obs.id); // Assuming obs.id is unique for local list
+                            observations.removeWhere((o) => o.id == obs.id);
                           }),
                         ),
                       ),
@@ -618,10 +653,22 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
         ),
         Padding(
           padding: const EdgeInsets.all(16),
-          child: FloatingActionButton.extended(
-            icon: const Icon(Icons.add),
-            label: const Text('Add Observation'),
-            onPressed: () => _showAddObservationDialog(context),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              FloatingActionButton.extended(
+                icon: const Icon(Icons.add),
+                label: const Text('Add Observation'),
+                onPressed: submissionState.isLoading ? null : () => _showAddObservationDialog(context),
+              ),
+              FloatingActionButton.extended(
+                icon: submissionState.isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Icon(Icons.check),
+                label: const Text('Submit Count'),
+                onPressed: submissionState.isLoading ? null : _submitForm,
+              ),
+            ],
           ),
         ),
       ],
@@ -649,12 +696,15 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   }
 
   void _showAddObservationDialog(BuildContext ctx) {
-    Taxa? selectedTaxa; // Will hold the selected taxa object
+    Taxa? selectedTaxa;
+    final TextEditingController commonNameController = TextEditingController();
+    final TextEditingController scientificNameController = TextEditingController();
     int individuals = 1;
     String? activity;
     String? obsNotes;
 
-    final allTaxaAsyncValue = ref.read(allTaxaProvider); // Read the taxa list once
+    final allTaxaAsyncValue = ref.read(allTaxaProvider);
+    final taxaList = allTaxaAsyncValue.asData?.value ?? [];
 
     showDialog(
       context: ctx,
@@ -664,57 +714,90 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Autocomplete for Species Name
-              allTaxaAsyncValue.when(
-                data: (taxaList) {
-                  return Autocomplete<Taxa>(
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text == '') {
-                        return const Iterable<Taxa>.empty();
-                      }
-                      return taxaList.where((Taxa taxa) {
-                        final query = textEditingValue.text.toLowerCase();
-                        return (taxa.commonName?.toLowerCase().contains(query) ?? false) ||
-                               taxa.scientificName.toLowerCase().contains(query);
-                      });
-                    },
-                    displayStringForOption: (Taxa option) => option.toString(), // Uses Taxa.toString()
-                    fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-                      _speciesNameController.text = textEditingController.text; // Link to internal controller
-                      return TextFormField(
-                        controller: textEditingController,
-                        focusNode: focusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Species Name',
-                          border: OutlineInputBorder(),
+              // Separate Text Fields for Common and Scientific Name
+              Autocomplete<Taxa>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<Taxa>.empty();
+                  }
+                  final query = textEditingValue.text.toLowerCase();
+                  return taxaList.where((taxa) {
+                    return (taxa.commonName?.toLowerCase().contains(query) ?? false) ||
+                           taxa.scientificName.toLowerCase().contains(query);
+                  });
+                },
+                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<Taxa> onSelected, Iterable<Taxa> options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final Taxa option = options.elementAt(index);
+                            return ListTile(
+                              visualDensity: const VisualDensity(horizontal: 0, vertical: -4),
+                              title: Text(
+                                option.toString(),
+                                style: const TextStyle(fontSize: 14), // Smaller font size
+                              ),
+                              onTap: () {
+                                onSelected(option);
+                              },
+                            );
+                          },
                         ),
-                        onChanged: (v) {
-                          // This is for direct text input, not selection from options
-                          // If user types and doesn't select, selectedTaxa will be null
-                          selectedTaxa = null; // Clear selected taxa if user types
-                        },
-                      );
-                    },
-                    onSelected: (Taxa taxa) {
-                      selectedTaxa = taxa; // Set the selected taxa object
-                      _speciesNameController.text = taxa.toString(); // Update text field
-                    },
+                      ),
+                    ),
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, stack) => Text('Error loading species: $err'),
+                displayStringForOption: (Taxa option) => option.scientificName,
+                onSelected: (Taxa taxa) {
+                  selectedTaxa = taxa;
+                  commonNameController.text = taxa.commonName ?? '';
+                  scientificNameController.text = taxa.scientificName;
+                },
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Count',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                initialValue: '1',
-                onChanged: (v) => individuals = int.tryParse(v) ?? 1,
+              // Count with Increment/Decrement Buttons
+              StatefulBuilder(
+                builder: (BuildContext context, StateSetter setState) {
+                  return Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove),
+                        onPressed: () {
+                          if (individuals > 1) {
+                            setState(() => individuals--);
+                          }
+                        },
+                      ),
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: individuals.toString(),
+                          textAlign: TextAlign.center,
+                          decoration: const InputDecoration(
+                            labelText: 'Count',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.number,
+                          onChanged: (value) => individuals = int.tryParse(value) ?? 1,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () => setState(() => individuals++),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
+              // Activity and Notes
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'Activity (Optional)',
@@ -740,22 +823,27 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (selectedTaxa == null && _speciesNameController.text.isEmpty) {
+              // Ensure species name is selected or entered
+              if (selectedTaxa == null && scientificNameController.text.isEmpty) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Please select or enter a species name.')),
+                  const SnackBar(content: Text('Please select or enter a species name.'), behavior: SnackBarBehavior.floating),
                 );
                 return;
               }
 
+              final finalScientificName = selectedTaxa?.scientificName ?? scientificNameController.text;
+              final finalCommonName = selectedTaxa?.commonName ?? commonNameController.text;
+              final finalTaxaId = selectedTaxa?.id ?? finalScientificName.toLowerCase().replaceAll(' ', '_');
+
               setState(() {
                 observations.add(
                   Observation(
-                    id: DateTime.now().millisecondsSinceEpoch, // Local unique ID for list management
-                    countId: 0, // Placeholder, will be set by backend
-                    userId: FirebaseAuth.instance.currentUser!.uid, // Get current user's Firebase UID
-                    taxaId: selectedTaxa?.id ?? _speciesNameController.text.toLowerCase().replaceAll(' ', '_'), // Use selected taxa ID or slugify typed name
-                    taxaCommonName: selectedTaxa?.commonName ?? _speciesNameController.text,
-                    taxaScientificName: selectedTaxa?.scientificName ?? _speciesNameController.text,
+                    id: observations.length + 1,
+                    countId: 0,
+                    userId: FirebaseAuth.instance.currentUser!.uid,
+                    taxaId: finalTaxaId,
+                    taxaCommonName: finalCommonName,
+                    taxaScientificName: finalScientificName,
                     individuals: individuals,
                     activity: activity,
                     notes: obsNotes,

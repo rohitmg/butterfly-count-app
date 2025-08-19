@@ -1,16 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:butterfly_counts/providers/api_providers.dart';
+import 'package:butterfly_counts/data/models/recent_count.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:butterfly_counts/data/models/recent_count.dart'; // New import
+import 'package:geolocator/geolocator.dart'; // Import geolocator
 
-class HomeScreen extends ConsumerWidget {
+// Change HomeScreen to a ConsumerStatefulWidget to use initState
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _requestLocationPermission(); // Request location permission on load
+  }
+
+  Future<void> _requestLocationPermission() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled.
+      // You might want to show a dialog prompting the user to enable them.
+      return Future.error('Location services are disabled.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Permissions are denied.
+        // You might want to show a dialog explaining why permissions are needed.
+        return Future.error('Location permissions are denied.');
+      }
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      // Permissions are denied forever.
+      // You might want to show a dialog directing the user to app settings.
+      return Future.error('Location permissions are permanently denied, we cannot request permissions.');
+    }
+    // Location permission is granted.
+    // You could log this or trigger initial location fetch if needed immediately (though we're doing it on button press later).
+  }
+
+  @override
+  Widget build(BuildContext context) { // <--- REMOVED WidgetRef ref from arguments
     final theme = Theme.of(context);
 
+    // Access ref directly as a property of ConsumerState
     final userProfileAsyncValue = ref.watch(userProfileProvider);
     final userStatsAsyncValue = ref.watch(userStatsProvider);
     final recentCountsAsyncValue = ref.watch(recentCountsProvider);
@@ -55,8 +99,8 @@ class HomeScreen extends ConsumerWidget {
           // Recent Activity - dynamic
           recentCountsAsyncValue.when(
             data: (recentCounts) => _buildRecentActivity(theme, recentCounts),
-            loading: () => _buildRecentActivity(theme, null), // Pass null for loading
-            error: (err, stack) => _buildRecentActivity(theme, []), // Pass empty list on error
+            loading: () => _buildRecentActivity(theme, null),
+            error: (err, stack) => _buildRecentActivity(theme, []),
           ),
         ],
       ),
@@ -115,9 +159,9 @@ class HomeScreen extends ConsumerWidget {
       children: [
         Text('Recent Activity', style: theme.textTheme.titleLarge),
         const SizedBox(height: 12),
-        if (recentCounts == null) // Loading state
+        if (recentCounts == null)
           const Center(child: CircularProgressIndicator())
-        else if (recentCounts.isEmpty) // Empty/error state
+        else if (recentCounts.isEmpty)
           const Text('No recent activity found.')
         else
           Card(
@@ -126,7 +170,7 @@ class HomeScreen extends ConsumerWidget {
               child: Column(
                 children: recentCounts.map((count) {
                   return _buildActivityItem(
-                    count.mainSpecies, // From your new model
+                    count.mainSpecies,
                     count.speciesCount,
                     count.date,
                   );
