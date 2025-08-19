@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:butterfly_counts/data/models/taxa.dart';
 
-import './presentation/screens/LoginPage.dart';
 import './presentation/navigation/main_navigation_wrapper.dart';
+import './presentation/screens/LoginPage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await Hive.initFlutter();
+  Hive.registerAdapter(TaxaAdapter());
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );

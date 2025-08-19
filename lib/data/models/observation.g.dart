@@ -3,60 +3,40 @@
 part of 'observation.dart';
 
 // **************************************************************************
-// TypeAdapterGenerator
+// JsonSerializableGenerator
 // **************************************************************************
 
-class ObservationAdapter extends TypeAdapter<Observation> {
-  @override
-  final int typeId = 1;
-
-  @override
-  Observation read(BinaryReader reader) {
-    final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
-    return Observation(
-      id: fields[0] as String,
-      checklistId: fields[1] as String,
-      taxonId: fields[2] as String?,
-      customName: fields[3] as String?,
-      individuals: fields[4] as int,
-      lifeStage: fields[5] as String?,
-      behavior: fields[6] as String?,
-      remarks: fields[7] as String?,
+Observation _$ObservationFromJson(Map<String, dynamic> json) => Observation(
+      id: (json['id'] as num?)?.toInt(),
+      countId: (json['count_id'] as num).toInt(),
+      userId: json['user_id'] as String,
+      taxaId: json['taxa_id'] as String,
+      taxaCommonName: json['taxa_common_name'] as String?,
+      taxaScientificName: json['taxa_scientific_name'] as String?,
+      individuals: (json['individuals'] as num).toInt(),
+      activity: json['activity'] as String?,
+      notes: json['notes'] as String?,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+      createdAt: json['created_at'] == null
+          ? null
+          : DateTime.parse(json['created_at'] as String),
+      updatedAt: json['updated_at'] == null
+          ? null
+          : DateTime.parse(json['updated_at'] as String),
     );
-  }
 
-  @override
-  void write(BinaryWriter writer, Observation obj) {
-    writer
-      ..writeByte(8)
-      ..writeByte(0)
-      ..write(obj.id)
-      ..writeByte(1)
-      ..write(obj.checklistId)
-      ..writeByte(2)
-      ..write(obj.taxonId)
-      ..writeByte(3)
-      ..write(obj.customName)
-      ..writeByte(4)
-      ..write(obj.individuals)
-      ..writeByte(5)
-      ..write(obj.lifeStage)
-      ..writeByte(6)
-      ..write(obj.behavior)
-      ..writeByte(7)
-      ..write(obj.remarks);
-  }
-
-  @override
-  int get hashCode => typeId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ObservationAdapter &&
-          runtimeType == other.runtimeType &&
-          typeId == other.typeId;
-}
+Map<String, dynamic> _$ObservationToJson(Observation instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'count_id': instance.countId,
+      'user_id': instance.userId,
+      'taxa_id': instance.taxaId,
+      'taxa_common_name': instance.taxaCommonName,
+      'taxa_scientific_name': instance.taxaScientificName,
+      'individuals': instance.individuals,
+      'activity': instance.activity,
+      'notes': instance.notes,
+      'timestamp': instance.timestamp.toIso8601String(),
+      'created_at': instance.createdAt?.toIso8601String(),
+      'updated_at': instance.updatedAt?.toIso8601String(),
+    };

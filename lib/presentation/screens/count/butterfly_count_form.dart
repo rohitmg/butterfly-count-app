@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // For getting current user UID
 
 // your imports…
-import 'package:butterfly_counts/data/models/checklist.dart';
+import 'package:butterfly_counts/data/models/count_model.dart'; // Renamed from checklist.dart
 import 'package:butterfly_counts/data/models/observation.dart';
+import 'package:butterfly_counts/data/models/taxa.dart'; // New import for taxa lookup
+import 'package:butterfly_counts/providers/api_providers.dart'; // For API calls and taxa list
 
 class ButterflyCountForm extends ConsumerStatefulWidget {
   const ButterflyCountForm({Key? key}) : super(key: key);
@@ -31,20 +34,38 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
 
   double? latitude, longitude, altitude, accuracy;
   String weather = 'Sunny';
-  String? comments;
+  String? comments; // Corresponds to 'notes' in CountModel
 
   final List<Observation> observations = [];
 
   /// Timer for checklist page
   Timer? _timer;
   Duration _elapsed = Duration.zero;
-  static const Duration _testThreshold = Duration(seconds: 10);
+  // static const Duration _testThreshold = Duration(seconds: 10); // Removed, not used
+
+  // Controllers for text fields to pre-fill with current location
+  final TextEditingController _latitudeController = TextEditingController();
+  final TextEditingController _longitudeController = TextEditingController();
+  final TextEditingController _altitudeController = TextEditingController();
+  final TextEditingController _accuracyController = TextEditingController();
+  final TextEditingController _placeNameController = TextEditingController();
+  final TextEditingController _speciesNameController = TextEditingController(); // For add observation dialog
 
   @override
   void initState() {
     super.initState();
-    // start the timer right away
     _startTimer();
+    _getLocation(); // Fetch initial location on page load
+  }
+
+  @override
+  void didUpdateWidget(covariant ButterflyCountForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update text controllers if location changes
+    _latitudeController.text = latitude?.toString() ?? '';
+    _longitudeController.text = longitude?.toString() ?? '';
+    _altitudeController.text = altitude?.toString() ?? '';
+    _accuracyController.text = accuracy?.toString() ?? '';
   }
 
   void _startTimer() {
@@ -61,6 +82,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   void dispose() {
     _timer?.cancel();
     _pageController.dispose();
+    _latitudeController.dispose();
+    _longitudeController.dispose();
+    _altitudeController.dispose();
+    _accuracyController.dispose();
+    _placeNameController.dispose();
+    _speciesNameController.dispose();
     super.dispose();
   }
 
@@ -79,15 +106,137 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
+  // Modified _getLocation to update controllers
+  Future<void> _getLocation() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+      setState(() {
+        latitude = pos.latitude;
+        longitude = pos.longitude;
+        accuracy = pos.accuracy;
+        altitude = pos.altitude;
+        _latitudeController.text = latitude!.toStringAsFixed(7);
+        _longitudeController.text = longitude!.toStringAsFixed(7);
+        _accuracyController.text = accuracy!.toStringAsFixed(2);
+        _altitudeController.text = altitude!.toStringAsFixed(2);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location updated!')),
+      );
+    } catch (e) {
+      if (kDebugMode && (kIsWeb || Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        setState(() {
+          latitude = 28.6139; // Default to Delhi for debug
+          longitude = 77.2090; // Default to Delhi for debug
+          accuracy = 10;
+          altitude = 200;
+          _latitudeController.text = latitude!.toStringAsFixed(7);
+          _longitudeController.text = longitude!.toStringAsFixed(7);
+          _accuracyController.text = accuracy!.toStringAsFixed(2);
+          _altitudeController.text = altitude!.toStringAsFixed(2);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Geolocation not supported/failed. Using demo coordinates (Delhi).',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error getting location: ${e.toString()}'),
+          ),
+        );
+      }
+    }
+  }
+
+  // NEW: Function to handle form submission
+  Future<void> _submitForm() async {
+    final countSubmissionNotifier = ref.read(countSubmissionProvider.notifier);
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be logged in to submit a count.')),
+      );
+      return;
+    }
+
+    if (latitude == null || longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please set a valid location before submitting.')),
+      );
+      return;
+    }
+
+    if (observations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one observation.')),
+      );
+      return;
+    }
+
+    // Ensure end time is set
+    endTime ??= DateTime.now();
+
+    final countData = CountModel(
+      userId: user.uid,
+      team: teamName,
+      openAccess: openAccess,
+      date: selectedDate,
+      startTime: startTime,
+      endTime: endTime,
+      latitude: latitude!,
+      longitude: longitude!,
+      altitude: altitude,
+      accuracy: accuracy,
+      placeName: _placeNameController.text.isNotEmpty ? _placeNameController.text : null,
+      distanceCovered: null, // Not collected in UI yet
+      weather: weather,
+      notes: comments,
+      version: '1.0.0', // Hardcode for now
+    );
+
+    // Call the submission provider
+    await countSubmissionNotifier.submitCountAndObservations(
+      countData: countData,
+      observationsData: observations,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Colors for the tab bar
     final tabBarBg = isDark ? Colors.grey[850]! : Colors.grey[200]!;
     final activeColor = isDark ? Colors.lightBlue[200]! : Colors.blue;
     final inactiveColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final disabledColor = Theme.of(context).disabledColor;
+
+    // Watch the submission state
+    final submissionState = ref.watch(countSubmissionProvider);
+
+    // Listen for submission success/error
+    ref.listen<AsyncValue<int?>>(countSubmissionProvider, (previous, next) {
+      next.whenOrNull(
+        data: (countId) {
+          if (countId != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Count submitted successfully! ID: $countId')),
+            );
+            Navigator.pop(context); // Go back after successful submission
+          }
+        },
+        error: (err, stack) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Submission failed: ${err.toString()}')),
+          );
+        },
+      );
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -95,35 +244,10 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
         actions: [
           if (_currentPage == 2)
             IconButton(
-              icon: const Icon(Icons.check),
-              onPressed: () {
-                // Build and save checklist…
-                final checklist = Checklist(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  userId: '1',
-                  teamName: teamName,
-                  placeName: '',
-                  latitude: latitude ?? 0,
-                  longitude: longitude ?? 0,
-                  altitude: altitude,
-                  accuracy: accuracy,
-                  date: selectedDate,
-                  startTime: startTime,
-                  endTime: endTime ?? DateTime.now(),
-                  weather: weather,
-                  comments: comments,
-                  createdAt: DateTime.now(),
-                  updatedAt: DateTime.now(),
-                  isOpenAccess: openAccess,
-                  syncStatus: 'pending',
-                  observations: observations,
-                );
-                // TODO: save checklist
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Form submitted!')),
-                );
-                Navigator.pop(context);
-              },
+              icon: submissionState.isLoading
+                  ? const CircularProgressIndicator(color: Colors.white) // Show loading spinner
+                  : const Icon(Icons.check),
+              onPressed: submissionState.isLoading ? null : _submitForm, // Disable button while loading
             ),
         ],
       ),
@@ -176,7 +300,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
-  Widget _buildBottomTab(
+   Widget _buildBottomTab(
     String label,
     int index,
     Color active,
@@ -247,21 +371,14 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               if (picked != null) {
                 setState(() {
                   selectedDate = picked;
-                  // also adjust startTime and endTime to match picked date
                   startTime = DateTime(
-                    picked.year,
-                    picked.month,
-                    picked.day,
-                    startTime.hour,
-                    startTime.minute,
+                    picked.year, picked.month, picked.day,
+                    startTime.hour, startTime.minute,
                   );
                   if (endTime != null) {
                     endTime = DateTime(
-                      picked.year,
-                      picked.month,
-                      picked.day,
-                      endTime!.hour,
-                      endTime!.minute,
+                      picked.year, picked.month, picked.day,
+                      endTime!.hour, endTime!.minute,
                     );
                   }
                 });
@@ -281,13 +398,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               if (time != null) {
                 setState(() {
                   startTime = DateTime(
-                    selectedDate.year,
-                    selectedDate.month,
-                    selectedDate.day,
-                    time.hour,
-                    time.minute,
+                    selectedDate.year, selectedDate.month, selectedDate.day,
+                    time.hour, time.minute,
                   );
-                  // Ensure end time is after start time
                   if (endTime != null && !endTime!.isAfter(startTime)) {
                     endTime = startTime.add(const Duration(hours: 1));
                   }
@@ -314,11 +427,8 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               );
               if (time != null) {
                 final newEndTime = DateTime(
-                  selectedDate.year,
-                  selectedDate.month,
-                  selectedDate.day,
-                  time.hour,
-                  time.minute,
+                  selectedDate.year, selectedDate.month, selectedDate.day,
+                  time.hour, time.minute,
                 );
                 if (newEndTime.isAfter(startTime)) {
                   setState(() => endTime = newEndTime);
@@ -358,68 +468,31 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           ElevatedButton.icon(
             icon: const Icon(Icons.my_location),
             label: const Text('Use Current Location'),
-            onPressed: () async {
-              try {
-                final position = await Geolocator.getCurrentPosition();
-                setState(() {
-                  latitude = position.latitude;
-                  longitude = position.longitude;
-                  accuracy = position.accuracy;
-                  altitude = position.altitude;
-                });
-              } catch (e) {
-                // Only allow fallback in debug mode, and on desktop/web:
-                if (kDebugMode &&
-                    (kIsWeb ||
-                        Platform.isWindows ||
-                        Platform.isLinux ||
-                        Platform.isMacOS)) {
-                  setState(() {
-                    latitude = 0.0;
-                    longitude = 0.0;
-                    accuracy = 1;
-                    altitude = 2;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Geolocation not supported on this platform.\nDemo values used. This will never show in production!',
-                      ),
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error getting location: ${e.toString()}'),
-                    ),
-                  );
-                }
-              }
-            },
+            onPressed: _getLocation, // Use the _getLocation method
           ),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: TextFormField(
+                  controller: _latitudeController, // Use controller
                   decoration: const InputDecoration(
                     labelText: 'Latitude',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
-                  initialValue: latitude?.toString() ?? '',
                   onChanged: (value) => latitude = double.tryParse(value),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
+                  controller: _longitudeController, // Use controller
                   decoration: const InputDecoration(
                     labelText: 'Longitude',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
-                  initialValue: longitude?.toString() ?? '',
                   onChanged: (value) => longitude = double.tryParse(value),
                 ),
               ),
@@ -430,28 +503,37 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             children: [
               Expanded(
                 child: TextFormField(
+                  controller: _altitudeController, // Use controller
                   decoration: const InputDecoration(
                     labelText: 'Altitude (m)',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
-                  initialValue: altitude?.toString() ?? '',
                   onChanged: (value) => altitude = double.tryParse(value),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: TextFormField(
+                  controller: _accuracyController, // Use controller
                   decoration: const InputDecoration(
                     labelText: 'Accuracy (m)',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
-                  initialValue: accuracy?.toString() ?? '',
                   onChanged: (value) => accuracy = double.tryParse(value),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _placeNameController, // Use controller
+            decoration: const InputDecoration(
+              labelText: 'Place Name (Optional)',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) => _placeNameController.text = value, // Update controller text
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
@@ -460,10 +542,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               labelText: 'Weather',
               border: OutlineInputBorder(),
             ),
-            items:
-                ['Sunny', 'Cloudy', 'Rainy', 'Windy']
-                    .map((w) => DropdownMenuItem(value: w, child: Text(w)))
-                    .toList(),
+            items: ['Sunny', 'Cloudy', 'Rainy', 'Windy']
+                .map((w) => DropdownMenuItem(value: w, child: Text(w)))
+                .toList(),
             onChanged: (value) => setState(() => weather = value ?? 'Sunny'),
           ),
           const SizedBox(height: 16),
@@ -481,46 +562,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
-  Future<void> _getLocation() async {
-    try {
-      final pos = await Geolocator.getCurrentPosition();
-      setState(() {
-        latitude = pos.latitude;
-        longitude = pos.longitude;
-        accuracy = pos.accuracy;
-        altitude = pos.altitude;
-      });
-    } catch (e) {
-      if (kDebugMode &&
-          (kIsWeb ||
-              Platform.isWindows ||
-              Platform.isLinux ||
-              Platform.isMacOS)) {
-        setState(() {
-          latitude = 0;
-          longitude = 0;
-          accuracy = 1;
-          altitude = 2;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Running on desktop/web in debug: using demo coords\nWon’t appear in production.',
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error getting location: $e')));
-      }
-    }
-  }
-
   Widget _buildChecklistPage() {
-    final underThreshold = _elapsed < _testThreshold;
-    final timerColor = underThreshold ? Colors.amber : Colors.green;
     final elapsedText = _elapsed.toString().split('.').first; // hh:mm:ss
+
+    // Calculate stats for checklist page
+    final int totalIndividualsObserved = observations.fold<int>(0, (s, o) => s + o.individuals);
+    final int uniqueSpeciesObserved = observations.map((o) => o.taxaId).toSet().length;
 
     return Column(
       children: [
@@ -528,62 +575,47 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              _buildStatCard('Species', observations.length.toString()),
+              _buildStatCard('Species', uniqueSpeciesObserved.toString()),
               const SizedBox(width: 8),
-              _buildStatCard(
-                'Individuals',
-                observations
-                    .fold<int>(0, (s, o) => s + o.individuals)
-                    .toString(),
-              ),
+              _buildStatCard('Individuals', totalIndividualsObserved.toString()),
               const SizedBox(width: 8),
-              _buildStatCard('Duration', elapsedText, customColor: timerColor),
+              _buildStatCard('Duration', elapsedText),
             ],
           ),
         ),
-        // Full-width, subtly colored DataTable:
         Expanded(
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SingleChildScrollView(
               child: DataTable(
-                headingRowColor: MaterialStateProperty.all(
-                  timerColor.withOpacity(0.1),
-                ),
-                dataRowColor: MaterialStateProperty.all(
-                  timerColor.withOpacity(0.03),
-                ),
+                headingRowColor: MaterialStateProperty.all(Theme.of(context).primaryColor.withOpacity(0.1)),
+                dataRowColor: MaterialStateProperty.all(Theme.of(context).primaryColor.withOpacity(0.03)),
                 columns: const [
                   DataColumn(label: Text('Species')),
                   DataColumn(label: Text('Count')),
                   DataColumn(label: Text('Actions')),
                 ],
-                rows:
-                    observations.map((obs) {
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(obs.customName ?? 'Unknown')),
-                          DataCell(Text('${obs.individuals}')),
-                          DataCell(
-                            IconButton(
-                              icon: const Icon(Icons.delete),
-                              onPressed:
-                                  () => setState(() {
-                                    observations.removeWhere(
-                                      (o) => o.id == obs.id,
-                                    );
-                                  }),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                rows: observations.map((obs) {
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(obs.taxaCommonName ?? obs.taxaScientificName ?? 'Unknown')),
+                      DataCell(Text('${obs.individuals}')),
+                      DataCell(
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () => setState(() {
+                            observations.removeWhere((o) => o.id == obs.id); // Assuming obs.id is unique for local list
+                          }),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
               ),
             ),
           ),
         ),
-        // Add button stays overlayed:
         Padding(
           padding: const EdgeInsets.all(16),
           child: FloatingActionButton.extended(
@@ -607,9 +639,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               Text(title, style: Theme.of(context).textTheme.labelSmall),
               Text(
                 value,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge!.copyWith(color: color),
+                style: Theme.of(context).textTheme.titleLarge!.copyWith(color: color),
               ),
             ],
           ),
@@ -619,70 +649,126 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   }
 
   void _showAddObservationDialog(BuildContext ctx) {
-    String? name;
-    int count = 1;
-    String? remarks;
+    Taxa? selectedTaxa; // Will hold the selected taxa object
+    int individuals = 1;
+    String? activity;
+    String? obsNotes;
+
+    final allTaxaAsyncValue = ref.read(allTaxaProvider); // Read the taxa list once
+
     showDialog(
       context: ctx,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Add Observation'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Species Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (v) => name = v,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Count',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                    initialValue: '1',
-                    onChanged: (v) => count = int.tryParse(v) ?? 1,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Remarks (Optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (v) => remarks = v,
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    observations.add(
-                      Observation(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        checklistId: '',
-                        customName: name,
-                        individuals: count,
-                        remarks: remarks,
-                      ),
-                    );
-                  });
-                  Navigator.pop(ctx);
+      builder: (_) => AlertDialog(
+        title: const Text('Add Observation'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Autocomplete for Species Name
+              allTaxaAsyncValue.when(
+                data: (taxaList) {
+                  return Autocomplete<Taxa>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text == '') {
+                        return const Iterable<Taxa>.empty();
+                      }
+                      return taxaList.where((Taxa taxa) {
+                        final query = textEditingValue.text.toLowerCase();
+                        return (taxa.commonName?.toLowerCase().contains(query) ?? false) ||
+                               taxa.scientificName.toLowerCase().contains(query);
+                      });
+                    },
+                    displayStringForOption: (Taxa option) => option.toString(), // Uses Taxa.toString()
+                    fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+                      _speciesNameController.text = textEditingController.text; // Link to internal controller
+                      return TextFormField(
+                        controller: textEditingController,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Species Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) {
+                          // This is for direct text input, not selection from options
+                          // If user types and doesn't select, selectedTaxa will be null
+                          selectedTaxa = null; // Clear selected taxa if user types
+                        },
+                      );
+                    },
+                    onSelected: (Taxa taxa) {
+                      selectedTaxa = taxa; // Set the selected taxa object
+                      _speciesNameController.text = taxa.toString(); // Update text field
+                    },
+                  );
                 },
-                child: const Text('Add'),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, stack) => Text('Error loading species: $err'),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Count',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                initialValue: '1',
+                onChanged: (v) => individuals = int.tryParse(v) ?? 1,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Activity (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => activity = v,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Remarks (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => obsNotes = v,
               ),
             ],
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (selectedTaxa == null && _speciesNameController.text.isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please select or enter a species name.')),
+                );
+                return;
+              }
+
+              setState(() {
+                observations.add(
+                  Observation(
+                    id: DateTime.now().millisecondsSinceEpoch, // Local unique ID for list management
+                    countId: 0, // Placeholder, will be set by backend
+                    userId: FirebaseAuth.instance.currentUser!.uid, // Get current user's Firebase UID
+                    taxaId: selectedTaxa?.id ?? _speciesNameController.text.toLowerCase().replaceAll(' ', '_'), // Use selected taxa ID or slugify typed name
+                    taxaCommonName: selectedTaxa?.commonName ?? _speciesNameController.text,
+                    taxaScientificName: selectedTaxa?.scientificName ?? _speciesNameController.text,
+                    individuals: individuals,
+                    activity: activity,
+                    notes: obsNotes,
+                    timestamp: DateTime.now(),
+                  ),
+                );
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 }

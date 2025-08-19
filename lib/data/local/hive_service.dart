@@ -1,43 +1,33 @@
+// lib/data/local/hive_service.dart
+import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../data/models/checklist.dart';
-import '../../data/models/observation.dart';
-import '../../data/models/taxon.dart';
-import '../../data/models/user.dart';
+import 'package:butterfly_counts/data/models/taxa.dart'; // Import your Taxa model
 
 class HiveService {
-  static const String checklistBoxName = 'checklists';
-  static const String observationBoxName = 'observations';
-  static const String taxonBoxName = 'taxa';
-  static const String userBoxName = 'users';
+  static const String _taxaBox = 'taxaBox';
 
-  static Future<void> init() async {
-    await Hive.initFlutter();
-    
-    // Register adapters
-    Hive.registerAdapter(ChecklistAdapter());
-    Hive.registerAdapter(ObservationAdapter());
-    Hive.registerAdapter(TaxonAdapter());
-    Hive.registerAdapter(UserAdapter());
+  // Future<void> init() async {
+  //   await Hive.initFlutter();
+  //   Hive.registerAdapter(TaxaAdapter()); // Register the generated adapter
+  // }
 
-    // Open all boxes
-    await Future.wait([
-      Hive.openBox<Checklist>(checklistBoxName),
-      Hive.openBox<Observation>(observationBoxName),
-      Hive.openBox<Taxon>(taxonBoxName),
-      Hive.openBox<User>(userBoxName),
-    ]);
+  Future<Box<T>> getBox<T>(String boxName) async {
+    return await Hive.openBox<T>(boxName);
   }
 
-  // Box getters
-  static Box<Checklist> get checklists => Hive.box<Checklist>(checklistBoxName);
-  static Box<Observation> get observations => Hive.box<Observation>(observationBoxName);
-  static Box<Taxon> get taxa => Hive.box<Taxon>(taxonBoxName);
-  static Box<User> get users => Hive.box<User>(userBoxName);
+  Future<void> saveTaxa(List<Taxa> taxaList) async {
+    final box = await Hive.openBox<Taxa>(_taxaBox);
+    await box.clear();
+    for (var taxa in taxaList) {
+      await box.put(taxa.id, taxa);
+    }
+    await box.close();
+  }
 
-  static Future<void> clearAll() async {
-    await checklists.clear();
-    await observations.clear();
-    await taxa.clear();
-    await users.clear();
+  Future<List<Taxa>> getTaxa() async {
+    final box = await Hive.openBox<Taxa>(_taxaBox);
+    final List<Taxa> taxaList = box.values.toList();
+    await box.close();
+    return taxaList;
   }
 }

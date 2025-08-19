@@ -1,27 +1,49 @@
-import 'package:hive/hive.dart';
+// lib/data/models/observation.dart
+import 'package:flutter/material.dart'; // For @required if using older Dart, or just for clarity
+import 'package:json_annotation/json_annotation.dart'; // New import
 
-part 'observation.g.dart';
+part 'observation.g.dart'; // This line tells Dart to look for the generated file
 
-@HiveType(typeId: 1)
+@JsonSerializable() // Add this annotation above your class
 class Observation {
-  @HiveField(0) final String id;
-  @HiveField(1) final String checklistId;
-  @HiveField(2) final String? taxonId;
-  @HiveField(3) final String? customName;
-  @HiveField(4) final int individuals;
-  @HiveField(5) final String? lifeStage;
-  @HiveField(6) final String? behavior;
-  @HiveField(7) final String? remarks;
+  final int? id;
+  @JsonKey(name: 'count_id') // Map JSON key to Dart field name
+  final int countId;
+  @JsonKey(name: 'user_id')
+  final String userId;
+  @JsonKey(name: 'taxa_id')
+  final String taxaId;
+  @JsonKey(name: 'taxa_common_name')
+  final String? taxaCommonName;
+  @JsonKey(name: 'taxa_scientific_name')
+  final String? taxaScientificName;
+  final int individuals;
+  final String? activity;
+  final String? notes;
+  final DateTime timestamp;
+  @JsonKey(name: 'created_at')
+  final DateTime? createdAt;
+  @JsonKey(name: 'updated_at')
+  final DateTime? updatedAt;
 
   Observation({
-    required this.id,
-    required this.checklistId,
-    this.taxonId,
-    this.customName,
+    this.id,
+    required this.countId,
+    required this.userId,
+    required this.taxaId,
+    this.taxaCommonName,
+    this.taxaScientificName,
     required this.individuals,
-    this.lifeStage,
-    this.behavior,
-    this.remarks,
-  }) : assert(taxonId != null || customName != null, 
-         'Must have either taxonId or customName');
+    this.activity,
+    this.notes,
+    required this.timestamp,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  // Factory constructor for deserialization from JSON
+  factory Observation.fromJson(Map<String, dynamic> json) => _$ObservationFromJson(json);
+
+  // Method for serialization to JSON
+  Map<String, dynamic> toJson() => _$ObservationToJson(this);
 }
