@@ -211,14 +211,14 @@ class CountSubmissionNotifier extends StateNotifier<AsyncValue<int?>> {
   final FirebaseAuth _firebaseAuth;
   final Ref _ref;
 
-  CountSubmissionNotifier(this._apiService, this._firebaseAuth, this._ref)
-    : super(const AsyncValue.data(null));
+  CountSubmissionNotifier(this._apiService, this._firebaseAuth, this._ref) : super(const AsyncValue.data(null));
 
   Future<void> submitCountAndObservations({
     required CountModel countData,
-    required List<Observation> observationsData,
+    // observationsData is now part of countData.observations, so remove this parameter
+    // required List<Observation> observationsData, // REMOVED
   }) async {
-    state = const AsyncValue.loading(); // Set loading state
+    state = const AsyncValue.loading();
 
     try {
       final user = _firebaseAuth.currentUser;
@@ -227,23 +227,22 @@ class CountSubmissionNotifier extends StateNotifier<AsyncValue<int?>> {
       }
       final idToken = await user.getIdToken();
 
-      // 1. Submit the Count
+      // 1. Submit the Count (which now contains observations in countData.observations)
       final countResponse = await _apiService.postCount(countData, idToken);
       if (countResponse.statusCode != 201) {
-        throw Exception(
-          'Failed to submit count: ${countResponse.statusCode} - ${countResponse.body}',
-        );
+        throw Exception('Failed to submit count: ${countResponse.statusCode} - ${countResponse.body}');
       }
       final newCountJson = json.decode(countResponse.body);
-      final newCountId =
-          newCountJson['id'] as int; // Get the ID from Laravel's response
+      final newCountId = newCountJson['id'] as int;
 
-      // 2. Submit Observations, linking them to the new Count ID
-      for (var obs in observationsData) {
+      // 2. Observations are now handled by the backend in one go.
+      // Remove the loop that manually posts observations.
+      /*
+      for (var obs in observationsData) { // THIS LOOP IS NO LONGER NEEDED
         final observationToSubmit = Observation(
-          id: obs.id, // ID will be ignored for new creation
-          countId: newCountId, // Link to the newly created count
-          userId: user.uid, // Ensure user ID is passed
+          id: obs.id,
+          countId: newCountId,
+          userId: user.uid,
           taxaId: obs.taxaId,
           taxaCommonName: obs.taxaCommonName,
           taxaScientificName: obs.taxaScientificName,
@@ -252,39 +251,31 @@ class CountSubmissionNotifier extends StateNotifier<AsyncValue<int?>> {
           notes: obs.notes,
           timestamp: obs.timestamp,
         );
-        final obsResponse = await _apiService.postObservation(
-          observationToSubmit,
-          idToken,
-        );
+        final obsResponse = await _apiService.postObservation(observationToSubmit, idToken);
         if (obsResponse.statusCode != 201) {
-          throw Exception(
-            'Failed to submit observation for ${obs.taxaCommonName}: ${obsResponse.statusCode} - ${obsResponse.body}',
-          );
+          throw Exception('Failed to submit observation for ${obs.taxaCommonName}: ${obsResponse.statusCode} - ${obsResponse.body}');
         }
       }
+      */
 
-      state = AsyncValue.data(
-        newCountId,
-      ); // Set success state with the new count ID
-      _ref.invalidate(userStatsProvider); // Refresh stats on home screen
-      _ref.invalidate(
-        recentCountsProvider,
-      ); // Refresh recent counts on home screen
+      state = AsyncValue.data(newCountId);
+      _ref.invalidate(userStatsProvider);
+      _ref.invalidate(recentCountsProvider);
+
     } catch (e, st) {
       if (kDebugMode) print('Count submission error: $e\n$st');
-      state = AsyncValue.error(e, st); // Set error state
+      state = AsyncValue.error(e, st);
     }
   }
 }
 
-final countSubmissionProvider =
-    StateNotifierProvider<CountSubmissionNotifier, AsyncValue<int?>>((ref) {
-      return CountSubmissionNotifier(
-        ref.watch(apiServiceProvider),
-        FirebaseAuth.instance,
-        ref, // Pass ref to invalidate other providers
-      );
-    });
+final countSubmissionProvider = StateNotifierProvider<CountSubmissionNotifier, AsyncValue<int?>>((ref) {
+  return CountSubmissionNotifier(
+    ref.watch(apiServiceProvider),
+    FirebaseAuth.instance,
+    ref,
+  );
+});
 
 //Provider to check local taxa cache status and last updated timestamp
 final localTaxaStatusProvider = FutureProvider<Map<String, dynamic>>((

@@ -215,14 +215,15 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       weather: weather,
       notes: comments,
       version: '1.0.0',
+      observations: observations, // Pass the observations list here
     );
 
     await countSubmissionNotifier.submitCountAndObservations(
       countData: countData,
-      observationsData: observations,
+      // observationsData is no longer passed separately
     );
-  }
-
+}
+  
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;

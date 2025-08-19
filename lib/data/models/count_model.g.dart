@@ -37,6 +37,9 @@ CountModel _$CountModelFromJson(Map<String, dynamic> json) => CountModel(
       updatedAt: json['updated_at'] == null
           ? null
           : DateTime.parse(json['updated_at'] as String),
+      observations: (json['observations'] as List<dynamic>)
+          .map((e) => Observation.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
 
 Map<String, dynamic> _$CountModelToJson(CountModel instance) =>
@@ -63,4 +66,5 @@ Map<String, dynamic> _$CountModelToJson(CountModel instance) =>
       'version': instance.version,
       'created_at': instance.createdAt?.toIso8601String(),
       'updated_at': instance.updatedAt?.toIso8601String(),
+      'observations': instance.observations,
     };
