@@ -109,7 +109,8 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   Future<void> _getLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
+        desiredAccuracy: LocationAccuracy.high,
+      );
       setState(() {
         latitude = pos.latitude;
         longitude = pos.longitude;
@@ -222,8 +223,8 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       countData: countData,
       // observationsData is no longer passed separately
     );
-}
-  
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -241,8 +242,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           if (countId != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text('Count submitted successfully! ID: $countId'),
-                  behavior: SnackBarBehavior.floating),
+                content: Text('Count submitted successfully! ID: $countId'),
+                behavior: SnackBarBehavior.floating,
+              ),
             );
             Navigator.pop(context);
           }
@@ -250,8 +252,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
         error: (err, stack) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Submission failed: ${err.toString()}'),
-                behavior: SnackBarBehavior.floating),
+              content: Text('Submission failed: ${err.toString()}'),
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         },
       );
@@ -579,9 +582,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               labelText: 'Weather',
               border: OutlineInputBorder(),
             ),
-            items: ['Sunny', 'Cloudy', 'Rainy', 'Windy']
-                .map((w) => DropdownMenuItem(value: w, child: Text(w)))
-                .toList(),
+            items: [
+              'Sunny',
+              'Cloudy',
+              'Rainy',
+              'Windy',
+            ].map((w) => DropdownMenuItem(value: w, child: Text(w))).toList(),
             onChanged: (value) => setState(() => weather = value ?? 'Sunny'),
           ),
           const SizedBox(height: 16),
@@ -602,8 +608,14 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   Widget _buildChecklistPage(AsyncValue<int?> submissionState) {
     final elapsedText = _elapsed.toString().split('.').first;
 
-    final int totalIndividualsObserved = observations.fold<int>(0, (s, o) => s + o.individuals);
-    final int uniqueSpeciesObserved = observations.map((o) => o.taxaId).toSet().length;
+    final int totalIndividualsObserved = observations.fold<int>(
+      0,
+      (s, o) => s + o.individuals,
+    );
+    final int uniqueSpeciesObserved = observations
+        .map((o) => o.taxaId)
+        .toSet()
+        .length;
 
     return Column(
       children: [
@@ -613,7 +625,10 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             children: [
               _buildStatCard('Species', uniqueSpeciesObserved.toString()),
               const SizedBox(width: 8),
-              _buildStatCard('Individuals', totalIndividualsObserved.toString()),
+              _buildStatCard(
+                'Individuals',
+                totalIndividualsObserved.toString(),
+              ),
               const SizedBox(width: 8),
               _buildStatCard('Duration', elapsedText),
             ],
@@ -625,8 +640,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SingleChildScrollView(
               child: DataTable(
-                headingRowColor: MaterialStateProperty.all(Theme.of(context).primaryColor.withOpacity(0.1)),
-                dataRowColor: MaterialStateProperty.all(Theme.of(context).primaryColor.withOpacity(0.03)),
+                headingRowColor: MaterialStateProperty.all(
+                  Theme.of(context).primaryColor.withOpacity(0.1),
+                ),
+                dataRowColor: MaterialStateProperty.all(
+                  Theme.of(context).primaryColor.withOpacity(0.03),
+                ),
                 columns: const [
                   DataColumn(label: Text('Species')),
                   DataColumn(label: Text('Count')),
@@ -635,7 +654,13 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                 rows: observations.map((obs) {
                   return DataRow(
                     cells: [
-                      DataCell(Text(obs.taxaCommonName ?? obs.taxaScientificName ?? 'Unknown')),
+                      DataCell(
+                        Text(
+                          obs.taxaCommonName ??
+                              obs.taxaScientificName ??
+                              'Unknown',
+                        ),
+                      ),
                       DataCell(Text('${obs.individuals}')),
                       DataCell(
                         IconButton(
@@ -660,7 +685,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               FloatingActionButton.extended(
                 icon: const Icon(Icons.add),
                 label: const Text('Add Observation'),
-                onPressed: submissionState.isLoading ? null : () => _showAddObservationDialog(context),
+                onPressed: submissionState.isLoading
+                    ? null
+                    : () => _showAddObservationDialog(context, ref),
               ),
               FloatingActionButton.extended(
                 icon: submissionState.isLoading
@@ -687,7 +714,9 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               Text(title, style: Theme.of(context).textTheme.labelSmall),
               Text(
                 value,
-                style: Theme.of(context).textTheme.titleLarge!.copyWith(color: color),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge!.copyWith(color: color),
               ),
             ],
           ),
@@ -696,11 +725,13 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     );
   }
 
-  void _showAddObservationDialog(BuildContext ctx) {
+  void _showAddObservationDialog(BuildContext ctx, WidgetRef ref) {
+    // Receive ref here
     Taxa? selectedTaxa;
     final TextEditingController commonNameController = TextEditingController();
-    final TextEditingController scientificNameController = TextEditingController();
-    int individuals = 1;
+    final TextEditingController scientificNameController =
+        TextEditingController();
+    final ValueNotifier<int> individualsNotifier = ValueNotifier(1);
     String? activity;
     String? obsNotes;
 
@@ -715,48 +746,161 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Separate Text Fields for Common and Scientific Name
+              // Common Name Autocomplete
               Autocomplete<Taxa>(
+                fieldViewBuilder:
+                    (context, controller, focusNode, onFieldSubmitted) {
+                      commonNameController.text = controller.text;
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Common Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) {
+                          selectedTaxa = null; // Clear selection if user types
+                          scientificNameController
+                              .clear(); // Clear scientific name if common name is typed
+                        },
+                      );
+                    },
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   if (textEditingValue.text.isEmpty) {
                     return const Iterable<Taxa>.empty();
                   }
                   final query = textEditingValue.text.toLowerCase();
-                  return taxaList.where((taxa) {
-                    return (taxa.commonName?.toLowerCase().contains(query) ?? false) ||
-                           taxa.scientificName.toLowerCase().contains(query);
-                  });
-                },
-                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<Taxa> onSelected, Iterable<Taxa> options) {
-                  return Align(
-                    alignment: Alignment.topLeft,
-                    child: Material(
-                      elevation: 4.0,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        child: ListView.builder(
-                          padding: EdgeInsets.zero,
-                          shrinkWrap: true,
-                          itemCount: options.length,
-                          itemBuilder: (BuildContext context, int index) {
-                            final Taxa option = options.elementAt(index);
-                            return ListTile(
-                              visualDensity: const VisualDensity(horizontal: 0, vertical: -4),
-                              title: Text(
-                                option.toString(),
-                                style: const TextStyle(fontSize: 14), // Smaller font size
-                              ),
-                              onTap: () {
-                                onSelected(option);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ),
+                  return taxaList.where(
+                    (taxa) =>
+                        taxa.commonName?.toLowerCase().contains(query) ?? false,
                   );
                 },
-                displayStringForOption: (Taxa option) => option.scientificName,
+                optionsViewBuilder:
+                    (
+                      BuildContext context,
+                      AutocompleteOnSelected<Taxa> onSelected,
+                      Iterable<Taxa> options,
+                    ) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final Taxa option = options.elementAt(index);
+                                final suggestionText =
+                                    option.commonName != null &&
+                                        option.commonName!.isNotEmpty
+                                    ? '${option.commonName} (${option.scientificName})'
+                                    : option.scientificName;
+                                final query = commonNameController.text
+                                    .toLowerCase();
+                                return ListTile(
+                                  visualDensity: const VisualDensity(
+                                    horizontal: 0,
+                                    vertical: -4,
+                                  ),
+                                  title: Text.rich(
+                                    _highlightText(
+                                      suggestionText,
+                                      query,
+                                    ), // Highlight matching text
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                  onTap: () {
+                                    onSelected(option);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                onSelected: (Taxa taxa) {
+                  selectedTaxa = taxa;
+                  commonNameController.text = taxa.commonName ?? '';
+                  scientificNameController.text = taxa.scientificName;
+                },
+              ),
+              const SizedBox(height: 16),
+              // Scientific Name Autocomplete
+              Autocomplete<Taxa>(
+                fieldViewBuilder:
+                    (context, controller, focusNode, onFieldSubmitted) {
+                      scientificNameController.text = controller.text;
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Scientific Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) {
+                          selectedTaxa = null; // Clear selection if user types
+                          commonNameController
+                              .clear(); // Clear common name if scientific name is typed
+                        },
+                      );
+                    },
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<Taxa>.empty();
+                  }
+                  final query = textEditingValue.text.toLowerCase();
+                  return taxaList.where(
+                    (taxa) => taxa.scientificName.toLowerCase().contains(query),
+                  );
+                },
+                optionsViewBuilder:
+                    (
+                      BuildContext context,
+                      AutocompleteOnSelected<Taxa> onSelected,
+                      Iterable<Taxa> options,
+                    ) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final Taxa option = options.elementAt(index);
+                                final suggestionText =
+                                    option.commonName != null &&
+                                        option.commonName!.isNotEmpty
+                                    ? '${option.commonName} (${option.scientificName})'
+                                    : option.scientificName;
+                                final query = scientificNameController.text
+                                    .toLowerCase();
+                                return ListTile(
+                                  visualDensity: const VisualDensity(
+                                    horizontal: 0,
+                                    vertical: -4,
+                                  ),
+                                  title: Text.rich(
+                                    _highlightText(suggestionText, query),
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                  onTap: () {
+                                    onSelected(option);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                 onSelected: (Taxa taxa) {
                   selectedTaxa = taxa;
                   commonNameController.text = taxa.commonName ?? '';
@@ -765,15 +909,16 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               ),
               const SizedBox(height: 16),
               // Count with Increment/Decrement Buttons
-              StatefulBuilder(
-                builder: (BuildContext context, StateSetter setState) {
+              ValueListenableBuilder<int>(
+                valueListenable: individualsNotifier,
+                builder: (context, individuals, _) {
                   return Row(
                     children: [
                       IconButton(
                         icon: const Icon(Icons.remove),
                         onPressed: () {
                           if (individuals > 1) {
-                            setState(() => individuals--);
+                            individualsNotifier.value--;
                           }
                         },
                       ),
@@ -786,12 +931,13 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
-                          onChanged: (value) => individuals = int.tryParse(value) ?? 1,
+                          onChanged: (value) => individualsNotifier.value =
+                              int.tryParse(value) ?? 1,
                         ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.add),
-                        onPressed: () => setState(() => individuals++),
+                        onPressed: () => individualsNotifier.value++,
                       ),
                     ],
                   );
@@ -825,16 +971,25 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           ElevatedButton(
             onPressed: () {
               // Ensure species name is selected or entered
-              if (selectedTaxa == null && scientificNameController.text.isEmpty) {
+              if (selectedTaxa == null &&
+                  scientificNameController.text.isEmpty &&
+                  commonNameController.text.isEmpty) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Please select or enter a species name.'), behavior: SnackBarBehavior.floating),
+                  const SnackBar(
+                    content: Text('Please select or enter a species name.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
                 );
                 return;
               }
 
-              final finalScientificName = selectedTaxa?.scientificName ?? scientificNameController.text;
-              final finalCommonName = selectedTaxa?.commonName ?? commonNameController.text;
-              final finalTaxaId = selectedTaxa?.id ?? finalScientificName.toLowerCase().replaceAll(' ', '_');
+              final finalScientificName =
+                  selectedTaxa?.scientificName ?? scientificNameController.text;
+              final finalCommonName =
+                  selectedTaxa?.commonName ?? commonNameController.text;
+              final finalTaxaId =
+                  selectedTaxa?.id ??
+                  finalScientificName.toLowerCase().replaceAll(' ', '_');
 
               setState(() {
                 observations.add(
@@ -845,7 +1000,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                     taxaId: finalTaxaId,
                     taxaCommonName: finalCommonName,
                     taxaScientificName: finalScientificName,
-                    individuals: individuals,
+                    individuals: individualsNotifier.value,
                     activity: activity,
                     notes: obsNotes,
                     timestamp: DateTime.now(),
@@ -859,5 +1014,37 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
         ],
       ),
     );
+  }
+
+  // Helper function for highlighting text in Autocomplete suggestions
+  TextSpan _highlightText(String text, String query) {
+    if (query.isEmpty) {
+      return TextSpan(text: text);
+    }
+    final List<TextSpan> spans = [];
+    final lowercaseText = text.toLowerCase();
+    final lowercaseQuery = query.toLowerCase();
+    int start = 0;
+    int indexOfMatch;
+    while ((indexOfMatch = lowercaseText.indexOf(lowercaseQuery, start)) !=
+        -1) {
+      if (indexOfMatch > start) {
+        spans.add(TextSpan(text: text.substring(start, indexOfMatch)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(indexOfMatch, indexOfMatch + query.length),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.blue,
+          ),
+        ),
+      );
+      start = indexOfMatch + query.length;
+    }
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
+    }
+    return TextSpan(children: spans);
   }
 }
