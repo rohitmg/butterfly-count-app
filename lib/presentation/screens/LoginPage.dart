@@ -1,10 +1,8 @@
-// lib/presentation/screens/LoginPage.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // NEW: For Google icon
 import '../../data/auth/auth_service.dart';
 
-// 1. Convert to a StatefulWidget
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -13,65 +11,142 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // 2. Declare the AuthService instance.
-  // It is now a late final field within the State class.
   late final AuthService _authService;
+  bool _isLoading = false; // NEW: To manage loading state during sign-in
 
   @override
   void initState() {
     super.initState();
-    // 3. Initialize the AuthService instance here, which is a non-const context.
     _authService = AuthService();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Determine if dark mode is active for dynamic colors
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Define colors for the gradient background
+    final List<Color> gradientColors = isDark
+        ? [Colors.grey[850]!, Colors.grey[900]!] // Darker gradient for dark mode
+        : [Colors.lightBlue[50]!, Colors.blue[100]!]; // Lighter, subtle blue gradient
+
     return Scaffold(
-      // The rest of your widget's UI code remains the same.
-      // You can now access `_authService` within this build method.
-      appBar: AppBar(
-        title: const Text('Sign In'),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Welcome! Please sign in to continue.',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  User? user = await _authService.signInWithGoogle();
-                  if (user != null) {
-                    print('Signed in as: ${user.displayName}');
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Google Sign-In failed or cancelled.'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                },
-                icon: Image.asset('assets/google_logo.png', height: 24.0),
-                label: const Text('Sign In with Google', style: TextStyle(fontSize: 18)),
-                style: ElevatedButton.styleFrom(
-                  foregroundColor: Colors.black87,
-                  backgroundColor: Colors.white,
-                  minimumSize: const Size(250, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  elevation: 5,
+      body: Container(
+        // Apply a subtle gradient background
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradientColors,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView( // Allow scrolling if content overflows
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // App Logo
+                Image.asset(
+                  'assets/logo.png', // Your app's logo
+                  height: 150, // Adjust size as needed
+                  width: 150,
                 ),
-              ),
-            ],
+                const SizedBox(height: 32),
+
+                // Welcome Text
+                Text(
+                  'Welcome to Butterfly Counts!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.blue[900],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your journey to track and explore butterflies begins here.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+
+                // Google Sign-In Button
+                ElevatedButton.icon(
+                  onPressed: _isLoading
+                      ? null // Disable button when loading
+                      : () async {
+                          setState(() {
+                            _isLoading = true; // Set loading state
+                          });
+                          User? user = await _authService.signInWithGoogle();
+                          if (user != null) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Signed in as: ${user.displayName ?? user.email}'),
+                                  backgroundColor: Colors.green,
+                                  behavior: SnackBarBehavior.floating, // Floating snackbar
+                                ),
+                              );
+                            }
+                            // Optionally navigate to home screen after successful login
+                            // Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen()));
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Google Sign-In failed or cancelled.'),
+                                  backgroundColor: Colors.red,
+                                  behavior: SnackBarBehavior.floating, // Floating snackbar
+                                ),
+                              );
+                            }
+                          }
+                          setState(() {
+                            _isLoading = false; // Reset loading state
+                          });
+                        },
+                  icon: _isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black54),
+                          ),
+                        )
+                      : const Icon(FontAwesomeIcons.google, color: Colors.black87), // Google icon from Font Awesome
+                  label: Text(
+                    _isLoading ? 'Signing In...' : 'Sign In with Google',
+                    style: const TextStyle(fontSize: 18, color: Colors.black87),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.black87,
+                    backgroundColor: Colors.white,
+                    minimumSize: const Size(280, 55), // Slightly larger button
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 8, // More prominent shadow
+                    shadowColor: Colors.black.withOpacity(0.3),
+                  ),
+                ),
+                const SizedBox(height: 20), // Spacing below button
+                Text(
+                  'By signing in, you agree to our Terms and Privacy Policy.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),

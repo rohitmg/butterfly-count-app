@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:butterfly_counts/providers/api_providers.dart';
-import 'package:butterfly_counts/data/models/recent_count.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart'; // Import geolocator
+import 'package:geolocator/geolocator.dart';
+import 'package:butterfly_counts/data/models/recent_count.dart';
 
-// Change HomeScreen to a ConsumerStatefulWidget to use initState
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,7 +16,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _requestLocationPermission(); // Request location permission on load
+    _requestPermissionsAndFetchData(); // Consolidated permission and data fetching
+  }
+
+  Future<void> _requestPermissionsAndFetchData() async {
+    // 1. Handle location permissions
+    _requestLocationPermission();
+
+    // 2. Automatically pull taxa list if it's not available
+    // Use Future.microtask to avoid a build-time dependency and ref.read() to trigger the fetch
+    Future.microtask(() {
+      final taxaAsyncValue = ref.read(allTaxaProvider);
+      
+      // The allTaxaProvider's logic already handles the caching/fetching.
+      // We just need to "read" it here to initiate its future.
+      // The UI (e.g., the Autocomplete in the form) will then watch its state.
+    });
   }
 
   Future<void> _requestLocationPermission() async {
@@ -26,8 +40,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Location services are not enabled.
-      // You might want to show a dialog prompting the user to enable them.
       return Future.error('Location services are disabled.');
     }
 
@@ -35,26 +47,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Permissions are denied.
-        // You might want to show a dialog explaining why permissions are needed.
         return Future.error('Location permissions are denied.');
       }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever.
-      // You might want to show a dialog directing the user to app settings.
       return Future.error('Location permissions are permanently denied, we cannot request permissions.');
     }
-    // Location permission is granted.
-    // You could log this or trigger initial location fetch if needed immediately (though we're doing it on button press later).
   }
 
   @override
-  Widget build(BuildContext context) { // <--- REMOVED WidgetRef ref from arguments
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Access ref directly as a property of ConsumerState
     final userProfileAsyncValue = ref.watch(userProfileProvider);
     final userStatsAsyncValue = ref.watch(userStatsProvider);
     final recentCountsAsyncValue = ref.watch(recentCountsProvider);
@@ -64,7 +69,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header - dynamic
           userProfileAsyncValue.when(
             data: (userProfile) => _buildWelcomeHeader(userProfile['name']),
             loading: () => _buildWelcomeHeader('Loading...'),
@@ -77,7 +81,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Stats Cards - dynamic
           userStatsAsyncValue.when(
             data: (stats) => _buildStatsRow(
               totalCounts: stats.totalCounts.toString(),
@@ -96,7 +99,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Recent Activity - dynamic
           recentCountsAsyncValue.when(
             data: (recentCounts) => _buildRecentActivity(theme, recentCounts),
             loading: () => _buildRecentActivity(theme, null),
@@ -159,20 +161,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       children: [
         Text('Recent Activity', style: theme.textTheme.titleLarge),
         const SizedBox(height: 12),
-        if (recentCounts == null)
+        if (recentCounts == null) // Loading state (when future is null, e.g., initial load)
           const Center(child: CircularProgressIndicator())
-        else if (recentCounts.isEmpty)
+        else if (recentCounts.isEmpty) // Empty state (API returned empty list or error)
           const Text('No recent activity found.')
-        else
+        else // Data available
           Card(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: recentCounts.map((count) {
+                  // Ensure these fields exist in your RecentCount model
                   return _buildActivityItem(
-                    count.mainSpecies,
-                    count.speciesCount,
-                    count.date,
+                    count.mainSpecies, // Access mainSpecies from RecentCount object
+                    count.speciesCount, // Access speciesCount from RecentCount object
+                    count.date, // Access date from RecentCount object
                   );
                 }).toList(),
               ),

@@ -43,6 +43,8 @@ dependencies:
   uuid: ^4.5.1  # For ID generation
   geolocator: ^14.0.0
   json_annotation: ^4.8.1
+  font_awesome_flutter: ^10.10.0 # Check pub.dev for the latest version
+  
 
 
   # The following adds the Cupertino Icons font to your application.
