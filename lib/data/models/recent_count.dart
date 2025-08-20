@@ -1,26 +1,35 @@
 // lib/data/models/recent_count.dart
+import 'package:json_annotation/json_annotation.dart';
+
+part 'recent_count.g.dart';
+
+@JsonSerializable()
 class RecentCount {
   final String id;
-  final String placeName;
+  @JsonKey(name: 'place_name')
+  final String? placeName; // <--- CHANGED TO BE NULLABLE
   final String date;
+  @JsonKey(name: 'species_count')
   final int speciesCount;
-  final String mainSpecies; // To display in the list
+  @JsonKey(name: 'main_species')
+  final String mainSpecies;
 
   RecentCount({
     required this.id,
-    required this.placeName,
+    this.placeName, // <--- CHANGED TO BE NULLABLE
     required this.date,
     required this.speciesCount,
     required this.mainSpecies,
   });
 
-  factory RecentCount.fromJson(Map<String, dynamic> json) {
-    return RecentCount(
-      id: json['id'].toString(),
-      placeName: json['place_name'] as String,
-      date: json['date'] as String, // You may want to parse this to DateTime
-      speciesCount: json['species_count'] as int,
-      mainSpecies: json['main_species'] as String,
-    );
-  }
+  factory RecentCount.fromJson(Map<String, dynamic> json) => _$RecentCountFromJson(json);
+  Map<String, dynamic> toJson() => _$RecentCountToJson(this);
 }
+
+// NOTE: You will need to manually update your `_$RecentCountFromJson`
+// function in the generated file `recent_count.g.dart` if json_serializable is not used.
+// If you use `json_serializable`, the generated code will handle these changes automatically.
+
+// If you are using json_serializable, your generated file will have a line like this:
+// id: (json['id'] as num).toString(), // <--- THIS IS THE KEY FIX
+// placeName: json['place_name'] as String?, // <--- THIS IS THE KEY FIX
