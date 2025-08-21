@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // NEW: For Google icon
 import '../../data/auth/auth_service.dart';
+import 'package:butterfly_counts/utils/snackbar_helper.dart'; // NEW: Import your SnackBarHelper
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -27,8 +28,14 @@ class _LoginPageState extends State<LoginPage> {
 
     // Define colors for the gradient background
     final List<Color> gradientColors = isDark
-        ? [Colors.grey[850]!, Colors.grey[900]!] // Darker gradient for dark mode
-        : [Colors.lightBlue[50]!, Colors.blue[100]!]; // Lighter, subtle blue gradient
+        ? [
+            Colors.grey[850]!,
+            Colors.grey[900]!,
+          ] // Darker gradient for dark mode
+        : [
+            Colors.lightBlue[50]!,
+            Colors.blue[100]!,
+          ]; // Lighter, subtle blue gradient
 
     return Scaffold(
       body: Container(
@@ -41,18 +48,13 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         child: Center(
-          child: SingleChildScrollView( // Allow scrolling if content overflows
+          child: SingleChildScrollView(
+            // Allow scrolling if content overflows
             padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // App Logo
-                Image.asset(
-                  'assets/logo.png', // Your app's logo
-                  height: 150, // Adjust size as needed
-                  width: 150,
-                ),
-                const SizedBox(height: 32),
 
                 // Welcome Text
                 Text(
@@ -64,9 +66,15 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
+                Image.asset(
+                  'assets/logo.png', // Your app's logo
+                  height: 150, // Adjust size as needed
+                  width: 150,
+                ),
+                const SizedBox(height: 64),
                 Text(
-                  'Your journey to track and explore butterflies begins here.',
+                  'Log Your Lepidoptera!!!',
                   style: TextStyle(
                     fontSize: 16,
                     color: isDark ? Colors.grey[300] : Colors.grey[700],
@@ -86,24 +94,21 @@ class _LoginPageState extends State<LoginPage> {
                           User? user = await _authService.signInWithGoogle();
                           if (user != null) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Signed in as: ${user.displayName ?? user.email}'),
-                                  backgroundColor: Colors.green,
-                                  behavior: SnackBarBehavior.floating, // Floating snackbar
-                                ),
+                              // Use the new helper function
+                              SnackBarHelper.showFloatingSnackBar(
+                                context,
+                                message:
+                                    'Signed in as: ${user.displayName ?? user.email}',
+                                type: SnackBarType.success, // Use success type
                               );
                             }
-                            // Optionally navigate to home screen after successful login
-                            // Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen()));
                           } else {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Google Sign-In failed or cancelled.'),
-                                  backgroundColor: Colors.red,
-                                  behavior: SnackBarBehavior.floating, // Floating snackbar
-                                ),
+                              // Use the new helper function
+                              SnackBarHelper.showFloatingSnackBar(
+                                context,
+                                message: 'Google Sign-In failed or cancelled.',
+                                type: SnackBarType.danger, // Use danger type
                               );
                             }
                           }
@@ -117,10 +122,15 @@ class _LoginPageState extends State<LoginPage> {
                           width: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black54),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.black54,
+                            ),
                           ),
                         )
-                      : const Icon(FontAwesomeIcons.google, color: Colors.black87), // Google icon from Font Awesome
+                      : const Icon(
+                          FontAwesomeIcons.google,
+                          color: Colors.black87,
+                        ), // Google icon from Font Awesome
                   label: Text(
                     _isLoading ? 'Signing In...' : 'Sign In with Google',
                     style: const TextStyle(fontSize: 18, color: Colors.black87),

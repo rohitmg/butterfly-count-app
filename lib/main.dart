@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,16 +7,15 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:butterfly_counts/core/theme/theme_manager.dart';
-import 'package:butterfly_counts/data/models/taxa.dart'; // Import the generated adapter for Taxa
-import 'package:butterfly_counts/presentation/navigation/main_navigation_wrapper.dart';
+import 'package:butterfly_counts/data/models/taxa.dart';
+import 'package:butterfly_counts/presentation/navigation/main_navigation_wrapper.dart'; // Ensure this import is correct
 import 'package:butterfly_counts/presentation/screens/LoginPage.dart';
 
-// Your Firebase options file
 import 'firebase_options.dart';
 
 // Declare a GlobalKey for your MainNavigationWrapper's state
+// FIX: MainNavigationWrapperState is now public
 final GlobalKey<MainNavigationWrapperState> mainNavigationKey = GlobalKey<MainNavigationWrapperState>();
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,9 +54,10 @@ class MyApp extends ConsumerWidget {
             );
           }
           if (snapshot.hasData) {
-              return MainNavigationWrapper(
+            // FIX: No 'user' parameter needed now
+            return MainNavigationWrapper(
               key: mainNavigationKey,
-             );
+            );
           } else {
             return const LoginPage();
           }
