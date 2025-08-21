@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http; // For NetworkException check
 
 //Data models and providers
 import 'package:butterfly_counts/data/models/count_model.dart';
@@ -23,11 +24,14 @@ import 'package:butterfly_counts/presentation/screens/count/location_page.dart';
 import 'package:butterfly_counts/presentation/screens/count/checklist_page.dart';
 
 class ButterflyCountForm extends ConsumerStatefulWidget {
-  // NEW: Add a callback to notify the parent about successful submission
   final VoidCallback onSubmissionSuccess;
   final ValueChanged<bool> onUnsavedChanges;
 
-  const ButterflyCountForm({Key? key, required this.onSubmissionSuccess, required this.onUnsavedChanges}) : super(key: key);
+  const ButterflyCountForm({
+    Key? key,
+    required this.onSubmissionSuccess,
+    required this.onUnsavedChanges,
+  }) : super(key: key);
 
   @override
   ConsumerState<ButterflyCountForm> createState() => _ButterflyCountFormState();
@@ -45,10 +49,11 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   late bool openAccess; // Initialized in initState from preferences
 
   double? latitude, longitude, altitude, accuracy;
-  String weather = 'Sunny';
+  String weather = '';
   String? comments; // Corresponds to 'notes' in CountModel
 
-  final List<Observation> observations = []; // List of observations for the current count
+  final List<Observation> observations =
+      []; // List of observations for the current count
 
   /// Timer for checklist page duration
   Timer? _timer;
@@ -61,10 +66,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   final TextEditingController _accuracyController = TextEditingController();
   final TextEditingController _placeNameController = TextEditingController();
 
-  // New: Internal flag for unsaved changes
+  static const String _inProgressCountBox = 'inProgressCountBox';
+  static const String _inProgressCountKey = 'inProgressCount';
+  static const String _pendingSubmissionsBox = 'pendingSubmissionsBox';
+
   bool _hasChanges = false;
-  
-  // NEW: Method to set the internal _hasChanges flag and notify the parent
+
   void _setChangesFlag(bool hasChanges) {
     if (_hasChanges != hasChanges) {
       setState(() => _hasChanges = hasChanges);
@@ -72,7 +79,6 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     }
   }
 
-  // NEW: A simple helper to check if the form is dirty
   bool get _isFormDirty =>
       teamName != null ||
       comments != null ||
@@ -80,26 +86,95 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       latitude != null ||
       _latitudeController.text.isNotEmpty; // Check controllers too
 
-
   @override
   void initState() {
     super.initState();
-    _startTimer();
-    // Initialize openAccess from the preference provider
     openAccess = ref.read(openAccessPreferenceProvider);
     _getLocation(); // Fetch initial location on form load
+    _startTimer();
+
+    _loadFormState();
+  }
+
+  Future<void> _saveFormState() async {
+    final Box box = await Hive.openBox(_inProgressCountBox);
+    final countState = {
+      'teamName': teamName,
+      'selectedDate': selectedDate.toIso8601String(),
+      'startTime': startTime.toIso8601String(),
+      'endTime': endTime?.toIso8601String(),
+      'openAccess': openAccess,
+      'latitude': latitude,
+      'longitude': longitude,
+      'altitude': altitude,
+      'accuracy': accuracy,
+      'weather': weather,
+      'comments': comments,
+      'observations': observations.map((o) => o.toJson()).toList(),
+    };
+    await box.put(_inProgressCountKey, countState);
+    await box.close();
+    if (kDebugMode) print('Form state saved to Hive.');
+  }
+
+  Future<void> _loadFormState() async {
+    final Box box = await Hive.openBox(_inProgressCountBox);
+    final savedState = box.get(_inProgressCountKey);
+    if (savedState != null) {
+      if (mounted) {
+        setState(() {
+          teamName = savedState['teamName'];
+          selectedDate = DateTime.parse(savedState['selectedDate']);
+          startTime = DateTime.parse(savedState['startTime']);
+          endTime = savedState['endTime'] != null
+              ? DateTime.parse(savedState['endTime'])
+              : null;
+          openAccess =
+              savedState['openAccess'] ??
+              ref.read(openAccessPreferenceProvider);
+          latitude = savedState['latitude'];
+          longitude = savedState['longitude'];
+          altitude = savedState['altitude'];
+          accuracy = savedState['accuracy'];
+          weather = savedState['weather'];
+          comments = savedState['comments'];
+          observations.clear();
+          observations.addAll(
+            (savedState['observations'] as List)
+                .map((o) => Observation.fromJson(o))
+                .toList(),
+          );
+
+          _latitudeController.text = latitude?.toStringAsFixed(7) ?? '';
+          _longitudeController.text = longitude?.toStringAsFixed(7) ?? '';
+          _altitudeController.text = altitude?.toStringAsFixed(2) ?? '';
+          _accuracyController.text = accuracy?.toStringAsFixed(2) ?? '';
+          _setChangesFlag(_isFormDirty);
+        });
+        SnackBarHelper.showFloatingSnackBar(
+          context,
+          message: 'Resumed count from saved state.',
+          type: SnackBarType.info,
+        );
+      }
+    }
+    await box.close();
+  }
+
+  Future<void> _clearSavedState() async {
+    final Box box = await Hive.openBox(_inProgressCountBox);
+    await box.delete(_inProgressCountKey);
+    await box.close();
+    if (kDebugMode) print('Form state cleared from Hive.');
   }
 
   @override
   void didUpdateWidget(covariant ButterflyCountForm oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Update text controllers if location changes (e.g., after _getLocation)
     _latitudeController.text = latitude?.toStringAsFixed(7) ?? '';
     _longitudeController.text = longitude?.toStringAsFixed(7) ?? '';
     _altitudeController.text = altitude?.toStringAsFixed(2) ?? '';
     _accuracyController.text = accuracy?.toStringAsFixed(2) ?? '';
-    
-    // NEW: Update the parent about changes when widget state changes
     _setChangesFlag(_isFormDirty);
   }
 
@@ -123,7 +198,11 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     _accuracyController.dispose();
     _placeNameController.dispose();
     super.dispose();
-    // NEW: Notify parent that widget is disposed (no more changes)
+
+    if (_hasChanges) {
+      _saveFormState();
+    }
+
     widget.onUnsavedChanges(false);
   }
 
@@ -132,22 +211,30 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     setState(() => teamName = value);
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateSelectedDate(DateTime value) {
     setState(() {
       selectedDate = value;
       startTime = DateTime(
-        value.year, value.month, value.day,
-        startTime.hour, startTime.minute,
+        value.year,
+        value.month,
+        value.day,
+        startTime.hour,
+        startTime.minute,
       );
       if (endTime != null) {
         endTime = DateTime(
-          value.year, value.month, value.day,
-          endTime!.hour, endTime!.minute,
+          value.year,
+          value.month,
+          value.day,
+          endTime!.hour,
+          endTime!.minute,
         );
       }
     });
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateStartTime(DateTime value) {
     setState(() {
       startTime = value;
@@ -157,6 +244,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     });
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateEndTime(DateTime? value) {
     if (value != null && !value.isAfter(startTime)) {
       SnackBarHelper.showFloatingSnackBar(
@@ -169,6 +257,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     setState(() => endTime = value);
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateOpenAccess(bool value) {
     setState(() => openAccess = value);
     _setChangesFlag(_isFormDirty);
@@ -178,26 +267,32 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     setState(() => latitude = double.tryParse(value ?? ''));
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateLongitude(String? value) {
     setState(() => longitude = double.tryParse(value ?? ''));
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateAltitude(String? value) {
     setState(() => altitude = double.tryParse(value ?? ''));
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateAccuracy(String? value) {
     setState(() => accuracy = double.tryParse(value ?? ''));
     _setChangesFlag(_isFormDirty);
   }
+
   void _updatePlaceName(String? value) {
     setState(() => _placeNameController.text = value ?? '');
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateWeather(String? value) {
     setState(() => weather = value ?? 'Sunny');
     _setChangesFlag(_isFormDirty);
   }
+
   void _updateComments(String? value) {
     setState(() => comments = value);
     _setChangesFlag(_isFormDirty);
@@ -290,11 +385,20 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     }
   }
 
+  // Save the form to a local queue and show a corresponding snackbar
+  Future<void> _saveOfflineSubmission(CountModel countData) async {
+    final hiveService = ref.read(hiveServiceProvider);
+    await hiveService.savePendingSubmission(
+      countData,
+    ); // Assumes this method exists
+    _clearSavedState();
+    widget.onSubmissionSuccess();
+  }
+
   // --- Form Submission ---
   Future<void> _submitForm() async {
     final countSubmissionNotifier = ref.read(countSubmissionProvider.notifier);
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) {
       SnackBarHelper.showFloatingSnackBar(
         context,
@@ -345,20 +449,91 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       observations: observations, // Pass the observations list
     );
 
-    await countSubmissionNotifier.submitCountAndObservations(
-      countData: countData,
+    // NEW: Show confirmation dialog before submission
+    final SubmissionChoice? choice = await showDialog<SubmissionChoice>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Submit Count?'),
+          content: const Text('Are you sure you want to submit this count?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(SubmissionChoice.cancel),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(SubmissionChoice.saveForLater),
+              child: const Text('Save for later'),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(SubmissionChoice.submitNow),
+              child: const Text('Submit Now'),
+            ),
+          ],
+        );
+      },
     );
+
+    if (choice == SubmissionChoice.cancel || choice == null) {
+      // User cancelled or dismissed dialog
+      SnackBarHelper.showFloatingSnackBar(
+        context,
+        message: 'Submission cancelled.',
+        type: SnackBarType.info,
+      );
+      return;
+    }
+
+    if (choice == SubmissionChoice.saveForLater) {
+      _saveOfflineSubmission(countData);
+      SnackBarHelper.showFloatingSnackBar(
+        context,
+        message: 'Count saved for later submission.',
+        type: SnackBarType.info,
+      );
+      _clearSavedState(); // Clear in-progress state
+      widget.onSubmissionSuccess(); // Navigate to home
+      return;
+    }
+
+    // If choice is SubmissionChoice.submitNow
+    try {
+      await countSubmissionNotifier.submitCountAndObservations(
+        countData: countData,
+      );
+
+      // On success
+      _clearSavedState();
+      widget.onSubmissionSuccess();
+    } on http.ClientException catch (e) {
+      if (kDebugMode) print('Network error: $e');
+      _saveOfflineSubmission(countData);
+      SnackBarHelper.showFloatingSnackBar(
+        context,
+        message: 'No network. Saved for later submission.',
+        type: SnackBarType.warning,
+      );
+      _clearSavedState(); // Clear in-progress state
+      widget.onSubmissionSuccess(); // Navigate to home
+    } catch (e) {
+      SnackBarHelper.showFloatingSnackBar(
+        context,
+        message: 'Submission failed: ${e.toString()}',
+        type: SnackBarType.danger,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final tabBarBg = isDark ? Colors.grey[850]! : Colors.grey[200]!;
     final activeColor = isDark ? Colors.lightBlue[200]! : Colors.blue;
     final inactiveColor = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final disabledColor = Theme.of(context).disabledColor;
-
     final submissionState = ref.watch(countSubmissionProvider);
 
     // Listen for submission success/error
@@ -404,7 +579,6 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       appBar: AppBar(
         title: const Text('New Butterfly Count'),
         actions: [
-          // Only show submit button on the last page
           if (_currentPage == 2)
             IconButton(
               icon: submissionState.isLoading
@@ -423,7 +597,6 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
               physics: const NeverScrollableScrollPhysics(), // Disable swipe
               onPageChanged: (i) => setState(() => _currentPage = i),
               children: [
-                // Pass state and callbacks to BasicInfoPage
                 BasicInfoPage(
                   teamName: teamName,
                   selectedDate: selectedDate,
@@ -445,7 +618,8 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                   placeNameController: _placeNameController,
                   weather: weather,
                   comments: comments,
-                  onUseCurrentLocation: _getLocation, // Pass the location method
+                  onUseCurrentLocation:
+                      _getLocation, // Pass the location method
                   onLatitudeChanged: _updateLatitude,
                   onLongitudeChanged: _updateLongitude,
                   onAltitudeChanged: _updateAltitude,
@@ -548,4 +722,11 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       ),
     );
   }
+}
+
+
+enum SubmissionChoice {
+  cancel,
+  submitNow,
+  saveForLater,
 }

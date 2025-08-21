@@ -134,6 +134,7 @@ class LocationPage extends ConsumerWidget {
               border: OutlineInputBorder(),
             ),
             items: [
+              '',
               'Sunny',
               'Cloudy',
               'Rainy',
