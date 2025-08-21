@@ -13,6 +13,8 @@ import 'package:butterfly_counts/data/models/count_model.dart'; // Renamed from 
 import 'package:butterfly_counts/data/models/observation.dart';
 import 'package:butterfly_counts/data/models/taxa.dart'; // New import for taxa lookup
 import 'package:butterfly_counts/providers/api_providers.dart';
+import 'package:butterfly_counts/providers/app_preferences_provider.dart'; // NEW: Import app preferences
+
 
 class ButterflyCountForm extends ConsumerStatefulWidget {
   const ButterflyCountForm({Key? key}) : super(key: key);
@@ -30,7 +32,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   DateTime selectedDate = DateTime.now();
   DateTime startTime = DateTime.now();
   DateTime? endTime;
-  bool openAccess = false;
+   late bool openAccess;
 
   double? latitude, longitude, altitude, accuracy;
   String weather = 'Sunny';
@@ -53,7 +55,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   void initState() {
     super.initState();
     _startTimer();
-    _getLocation(); // Fetch initial location on page load
+    openAccess = ref.read(openAccessPreferenceProvider);
   }
 
   @override
@@ -726,8 +728,8 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   }
 
   void _showAddObservationDialog(BuildContext ctx, WidgetRef ref) {
-    // Receive ref here
-    Taxa? selectedTaxa;
+    // Use ValueNotifier for a reactive selectedTaxa object
+    final selectedTaxaNotifier = ValueNotifier<Taxa?>(null);
     final TextEditingController commonNameController = TextEditingController();
     final TextEditingController scientificNameController =
         TextEditingController();
@@ -738,6 +740,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     final allTaxaAsyncValue = ref.read(allTaxaProvider);
     final taxaList = allTaxaAsyncValue.asData?.value ?? [];
 
+    // The dialog state builder listens to the selectedTaxaNotifier
     showDialog(
       context: ctx,
       builder: (_) => AlertDialog(
@@ -747,40 +750,23 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Common Name Autocomplete
-              Autocomplete<Taxa>(
-                fieldViewBuilder:
-                    (context, controller, focusNode, onFieldSubmitted) {
-                      commonNameController.text = controller.text;
-                      return TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Common Name',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (v) {
-                          selectedTaxa = null; // Clear selection if user types
-                          scientificNameController
-                              .clear(); // Clear scientific name if common name is typed
-                        },
+              ValueListenableBuilder<Taxa?>(
+                valueListenable: selectedTaxaNotifier,
+                builder: (context, selectedTaxa, child) {
+                  return Autocomplete<Taxa>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<Taxa>.empty();
+                      }
+                      final query = textEditingValue.text.toLowerCase();
+                      return taxaList.where(
+                        (taxa) =>
+                            taxa.commonName?.toLowerCase().contains(query) ??
+                            false,
                       );
                     },
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) {
-                    return const Iterable<Taxa>.empty();
-                  }
-                  final query = textEditingValue.text.toLowerCase();
-                  return taxaList.where(
-                    (taxa) =>
-                        taxa.commonName?.toLowerCase().contains(query) ?? false,
-                  );
-                },
-                optionsViewBuilder:
-                    (
-                      BuildContext context,
-                      AutocompleteOnSelected<Taxa> onSelected,
-                      Iterable<Taxa> options,
-                    ) {
+                    optionsViewBuilder: (context, onSelected, options) {
+                      final query = commonNameController.text;
                       return Align(
                         alignment: Alignment.topLeft,
                         child: Material(
@@ -791,25 +777,24 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                               padding: EdgeInsets.zero,
                               shrinkWrap: true,
                               itemCount: options.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                final Taxa option = options.elementAt(index);
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
                                 final suggestionText =
-                                    option.commonName != null &&
-                                        option.commonName!.isNotEmpty
+                                    (option.commonName != null &&
+                                        option.commonName!.isNotEmpty)
                                     ? '${option.commonName} (${option.scientificName})'
                                     : option.scientificName;
-                                final query = commonNameController.text
-                                    .toLowerCase();
+
                                 return ListTile(
                                   visualDensity: const VisualDensity(
                                     horizontal: 0,
                                     vertical: -4,
                                   ),
                                   title: Text.rich(
-                                    _highlightText(
+                                    _buildHighlightedText(
                                       suggestionText,
                                       query,
-                                    ), // Highlight matching text
+                                    ),
                                     style: const TextStyle(fontSize: 14),
                                   ),
                                   onTap: () {
@@ -822,47 +807,56 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                         ),
                       );
                     },
-                onSelected: (Taxa taxa) {
-                  selectedTaxa = taxa;
-                  commonNameController.text = taxa.commonName ?? '';
-                  scientificNameController.text = taxa.scientificName;
+                    displayStringForOption: (Taxa option) =>
+                        option.commonName ?? '',
+                    onSelected: (Taxa taxa) {
+                      selectedTaxaNotifier.value = taxa;
+                      commonNameController.text = taxa.commonName ?? '';
+                      scientificNameController.text = taxa.scientificName;
+                    },
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
+                          // The onSelected handler will set the controller's text
+                          // The onChanged handler will clear the linked controller
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Common Name',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (v) {
+                              if (v !=
+                                  (selectedTaxaNotifier.value?.commonName ??
+                                      '')) {
+                                selectedTaxaNotifier.value = null;
+                                scientificNameController.clear();
+                              }
+                              commonNameController.text = v;
+                            },
+                          );
+                        },
+                  );
                 },
               ),
               const SizedBox(height: 16),
               // Scientific Name Autocomplete
-              Autocomplete<Taxa>(
-                fieldViewBuilder:
-                    (context, controller, focusNode, onFieldSubmitted) {
-                      scientificNameController.text = controller.text;
-                      return TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Scientific Name',
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (v) {
-                          selectedTaxa = null; // Clear selection if user types
-                          commonNameController
-                              .clear(); // Clear common name if scientific name is typed
-                        },
+              ValueListenableBuilder<Taxa?>(
+                valueListenable: selectedTaxaNotifier,
+                builder: (context, selectedTaxa, child) {
+                  return Autocomplete<Taxa>(
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<Taxa>.empty();
+                      }
+                      final query = textEditingValue.text.toLowerCase();
+                      return taxaList.where(
+                        (taxa) =>
+                            taxa.scientificName.toLowerCase().contains(query),
                       );
                     },
-                optionsBuilder: (TextEditingValue textEditingValue) {
-                  if (textEditingValue.text.isEmpty) {
-                    return const Iterable<Taxa>.empty();
-                  }
-                  final query = textEditingValue.text.toLowerCase();
-                  return taxaList.where(
-                    (taxa) => taxa.scientificName.toLowerCase().contains(query),
-                  );
-                },
-                optionsViewBuilder:
-                    (
-                      BuildContext context,
-                      AutocompleteOnSelected<Taxa> onSelected,
-                      Iterable<Taxa> options,
-                    ) {
+                    optionsViewBuilder: (context, onSelected, options) {
+                      final query = scientificNameController.text;
                       return Align(
                         alignment: Alignment.topLeft,
                         child: Material(
@@ -873,22 +867,24 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                               padding: EdgeInsets.zero,
                               shrinkWrap: true,
                               itemCount: options.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                final Taxa option = options.elementAt(index);
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
                                 final suggestionText =
-                                    option.commonName != null &&
-                                        option.commonName!.isNotEmpty
+                                    (option.commonName != null &&
+                                        option.commonName!.isNotEmpty)
                                     ? '${option.commonName} (${option.scientificName})'
                                     : option.scientificName;
-                                final query = scientificNameController.text
-                                    .toLowerCase();
+
                                 return ListTile(
                                   visualDensity: const VisualDensity(
                                     horizontal: 0,
                                     vertical: -4,
                                   ),
                                   title: Text.rich(
-                                    _highlightText(suggestionText, query),
+                                    _buildHighlightedText(
+                                      suggestionText,
+                                      query,
+                                    ),
                                     style: const TextStyle(fontSize: 14),
                                   ),
                                   onTap: () {
@@ -901,14 +897,37 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                         ),
                       );
                     },
-                onSelected: (Taxa taxa) {
-                  selectedTaxa = taxa;
-                  commonNameController.text = taxa.commonName ?? '';
-                  scientificNameController.text = taxa.scientificName;
+                    displayStringForOption: (Taxa option) =>
+                        option.scientificName,
+                    onSelected: (Taxa taxa) {
+                      selectedTaxaNotifier.value = taxa;
+                      commonNameController.text = taxa.commonName ?? '';
+                      scientificNameController.text = taxa.scientificName;
+                    },
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Scientific Name',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (v) {
+                              if (v !=
+                                  (selectedTaxaNotifier.value?.scientificName ??
+                                      '')) {
+                                selectedTaxaNotifier.value = null;
+                                commonNameController.clear();
+                              }
+                            },
+                          );
+                        },
+                  );
                 },
               ),
               const SizedBox(height: 16),
-              // Count with Increment/Decrement Buttons
+              // Individuals with Increment/Decrement Buttons
               ValueListenableBuilder<int>(
                 valueListenable: individualsNotifier,
                 builder: (context, individuals, _) {
@@ -924,10 +943,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                       ),
                       Expanded(
                         child: TextFormField(
-                          initialValue: individuals.toString(),
+                          controller: TextEditingController(
+                            text: individuals.toString(),
+                          ),
                           textAlign: TextAlign.center,
                           decoration: const InputDecoration(
-                            labelText: 'Count',
+                            labelText: 'Individuals',
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
@@ -970,10 +991,14 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
           ),
           ElevatedButton(
             onPressed: () {
-              // Ensure species name is selected or entered
-              if (selectedTaxa == null &&
-                  scientificNameController.text.isEmpty &&
-                  commonNameController.text.isEmpty) {
+              final finalSelectedTaxa = selectedTaxaNotifier.value;
+              final finalScientificName =
+                  finalSelectedTaxa?.scientificName ??
+                  scientificNameController.text;
+              final finalCommonName =
+                  finalSelectedTaxa?.commonName ?? commonNameController.text;
+
+              if (finalScientificName.isEmpty && finalCommonName.isEmpty) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(
                     content: Text('Please select or enter a species name.'),
@@ -983,12 +1008,8 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
                 return;
               }
 
-              final finalScientificName =
-                  selectedTaxa?.scientificName ?? scientificNameController.text;
-              final finalCommonName =
-                  selectedTaxa?.commonName ?? commonNameController.text;
               final finalTaxaId =
-                  selectedTaxa?.id ??
+                  finalSelectedTaxa?.id ??
                   finalScientificName.toLowerCase().replaceAll(' ', '_');
 
               setState(() {
@@ -1017,7 +1038,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   }
 
   // Helper function for highlighting text in Autocomplete suggestions
-  TextSpan _highlightText(String text, String query) {
+  TextSpan _buildHighlightedText(String text, String query) {
     if (query.isEmpty) {
       return TextSpan(text: text);
     }

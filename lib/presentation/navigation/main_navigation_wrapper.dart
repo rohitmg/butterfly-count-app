@@ -6,20 +6,20 @@ import '../screens/count/butterfly_count_form.dart';
 import '../screens/count/my_counts_screen.dart';
 import '../screens/settings/settings_screen.dart';
 
+// Remove the 'user' parameter from the constructor
 class MainNavigationWrapper extends StatefulWidget {
-  final User user;
-
-  const MainNavigationWrapper({super.key, required this.user});
+  const MainNavigationWrapper({super.key}); // <--- REMOVED REQUIRED USER
 
   @override
-  State<MainNavigationWrapper> createState() => _MainNavigationWrapperState();
+  State<MainNavigationWrapper> createState() => MainNavigationWrapperState(); // <--- Changed to non-private for GlobalKey
 }
 
-class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
+// Make the State class non-private so GlobalKey can reference it
+class MainNavigationWrapperState extends State<MainNavigationWrapper> { // <--- REMOVED UNDERSCORE
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    HomeScreen(),
+    const HomeScreen(), // Ensure all children are const if possible
     const ButterflyCountForm(),
     const MyCountsScreen(),
     const SettingsScreen(),

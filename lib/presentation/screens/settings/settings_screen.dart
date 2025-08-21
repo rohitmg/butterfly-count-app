@@ -1,21 +1,25 @@
-import 'dart:async'; // Still needed for Completer if used elsewhere, but not for this onPressed
+// lib/presentation/screens/settings/settings_screen.dart
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import '../../../core/theme/theme_provider.dart';
-import '../../../providers/api_providers.dart'; // Import your API providers
-import '../../../data/models/taxa.dart'; // Ensure Taxa model is imported for ProviderSubscription type
+import 'package:intl/intl.dart';
+import 'package:butterfly_counts/core/theme/theme_manager.dart'; // <--- NEW: Import theme_manager
+import 'package:butterfly_counts/providers/api_providers.dart';
+import 'package:butterfly_counts/data/models/taxa.dart';
+import 'package:butterfly_counts/providers/app_preferences_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDarkMode = ref.watch(themeProvider);
-    final localTaxaStatusAsync = ref.watch(
-      localTaxaStatusProvider,
-    ); // Watch the new provider
+    // Watch the actual ThemeData from themeProvider
+    final currentTheme = ref.watch(themeProvider);
+    final isDarkMode = currentTheme.brightness == Brightness.dark; // Derive isDarkMode from theme
+    
+    final localTaxaStatusAsync = ref.watch(localTaxaStatusProvider);
+    final openAccessPreference = ref.watch(openAccessPreferenceProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -24,12 +28,22 @@ class SettingsScreen extends ConsumerWidget {
         children: [
           SwitchListTile(
             title: const Text('Dark Mode'),
-            value: isDarkMode,
-            onChanged: (value) =>
-                ref.read(themeProvider.notifier).state = value,
+            value: isDarkMode, // Use the derived isDarkMode
+            onChanged: (value) {
+              // Call the toggleTheme method on the notifier
+              ref.read(themeProvider.notifier).toggleTheme();
+            },
           ),
-          const Divider(), // Add a divider for separation
-          // NEW: Taxa List Management Section
+          const Divider(),
+
+          SwitchListTile(
+            title: const Text('Default Open Access'),
+            subtitle: const Text('Make your counts publicly visible by default'),
+            value: openAccessPreference,
+            onChanged: (value) => ref.read(openAccessPreferenceProvider.notifier).setOpenAccessPreference(value),
+          ),
+          const Divider(),
+
           localTaxaStatusAsync.when(
             data: (status) {
               final isCached = status['is_cached'] as bool;
@@ -39,7 +53,6 @@ class SettingsScreen extends ConsumerWidget {
                 try {
                   lastUpdatedDate = DateTime.parse(lastUpdatedString);
                 } catch (e) {
-                  // Handle parsing error if timestamp format is inconsistent
                   lastUpdatedDate = null;
                 }
               }
@@ -61,64 +74,40 @@ class SettingsScreen extends ConsumerWidget {
                       onPressed: () async {
                         final scaffold = ScaffoldMessenger.of(context);
 
-                        // Show loading snackbar
                         final loadingSnackbar = scaffold.showSnackBar(
                           SnackBar(
                             content: Row(
                               children: [
                                 const CircularProgressIndicator(),
                                 const SizedBox(width: 16),
-                                Text(
-                                  isCached
-                                      ? 'Updating taxa list...'
-                                      : 'Downloading taxa list...',
-                                ),
+                                Text(isCached ? 'Updating taxa list...' : 'Downloading taxa list...'),
                               ],
                             ),
-                            duration: const Duration(
-                              minutes: 1,
-                            ), // Long duration for loading
+                            duration: const Duration(minutes: 1),
                           ),
                         );
 
                         try {
-                          // Invalidate and wait for the provider to complete
                           ref.invalidate(allTaxaProvider);
-                          ref.invalidate(
-                            localTaxaStatusProvider,
-                          ); // Invalidate status to show loading
+                          ref.invalidate(localTaxaStatusProvider);
 
-                          // Wait for the provider to complete its async operation
-                          await ref.read(
-                            allTaxaProvider.future,
-                          ); // Await the future directly
+                          await ref.read(allTaxaProvider.future);
 
-                          // Show success message
                           scaffold.showSnackBar(
-                            const SnackBar(
-                              content: Text('Taxa list updated successfully!'),
-                            ),
+                            const SnackBar(content: Text('Taxa list updated successfully!')),
                           );
                         } catch (e) {
-                          // Show error message
                           scaffold.showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Failed to update taxa list: ${e.toString()}',
-                              ),
-                            ),
+                            SnackBar(content: Text('Failed to update taxa list: ${e.toString()}')),
                           );
                         } finally {
-                          // Hide loading snackbar
                           loadingSnackbar.close();
-                          // Invalidate localTaxaStatusProvider again to reflect the final state (success or error)
                           ref.invalidate(localTaxaStatusProvider);
                         }
                       },
                       child: Text(isCached ? 'Update List' : 'Download List'),
                     ),
                   ),
-                  // TODO: Add UI for adding/removing/editing individual species from user's local overrides
                 ],
               );
             },
