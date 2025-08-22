@@ -1,6 +1,10 @@
 // lib/presentation/navigation/main_navigation_wrapper.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'package:butterfly_counts/services/sync_service.dart'; // Import SyncService provider
+
 import 'package:butterfly_counts/utils/snackbar_helper.dart';
 import 'package:butterfly_counts/core/app_colors.dart';
 
@@ -10,14 +14,14 @@ import '../screens/count/butterfly_count_form.dart';
 import '../screens/count/my_counts_screen.dart';
 import '../screens/settings/settings_screen.dart';
 
-class MainNavigationWrapper extends StatefulWidget {
+class MainNavigationWrapper extends ConsumerStatefulWidget {
   const MainNavigationWrapper({super.key});
 
   @override
-  State<MainNavigationWrapper> createState() => MainNavigationWrapperState();
+  ConsumerState<MainNavigationWrapper> createState() => MainNavigationWrapperState();
 }
 
-class MainNavigationWrapperState extends State<MainNavigationWrapper> {
+class MainNavigationWrapperState extends ConsumerState<MainNavigationWrapper> {
   int _currentIndex = 0;
   bool _hasUnsavedChanges = false;
 
@@ -27,16 +31,13 @@ class MainNavigationWrapperState extends State<MainNavigationWrapper> {
     }
   }
 
-  // NEW: Callback to navigate to the home screen
   void _navigateToHome() {
-    setState(() {
-      _currentIndex = 0;
-      _hasUnsavedChanges = false; // Reset changes flag
-    });
-    // The Navigator will still have the form page on the stack
-    // so we need to pop that off. This is a bit complex.
-    // The simplest way is to ensure the form is cleared, and MainNavigationWrapper
-    // just stays on the home screen index.
+    if(mounted){
+      setState(() {
+        _currentIndex = 0;
+        _hasUnsavedChanges = false; // Reset changes flag
+      });
+    }
   }
 
   // Pages list

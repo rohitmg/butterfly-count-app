@@ -45,6 +45,7 @@ dependencies:
   json_annotation: ^4.8.1
   font_awesome_flutter: ^10.10.0 # Check pub.dev for the latest version
   shared_preferences: ^2.2.2
+  connectivity_plus: ^5.0.2
   
 
 
