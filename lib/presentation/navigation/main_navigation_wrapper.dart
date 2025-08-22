@@ -104,6 +104,9 @@ class MainNavigationWrapperState extends State<MainNavigationWrapper> {
     } else {
       setState(() {
         _currentIndex = index;
+        if(_currentIndex != 1) {
+          _hasUnsavedChanges = false;
+        }
       });
     }
   }

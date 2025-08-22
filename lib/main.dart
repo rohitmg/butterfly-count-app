@@ -7,7 +7,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:butterfly_counts/core/theme/theme_manager.dart';
+
 import 'package:butterfly_counts/data/models/taxa.dart';
+import 'package:butterfly_counts/data/models/count_model.dart';
+import 'package:butterfly_counts/data/models/observation.dart';
+
 import 'package:butterfly_counts/presentation/navigation/main_navigation_wrapper.dart'; // Ensure this import is correct
 import 'package:butterfly_counts/presentation/screens/LoginPage.dart';
 
@@ -22,6 +26,8 @@ void main() async {
   
   await Hive.initFlutter();
   Hive.registerAdapter(TaxaAdapter());
+  Hive.registerAdapter(CountModelAdapter());
+  Hive.registerAdapter(ObservationAdapter());
 
   await SharedPreferences.getInstance();
   

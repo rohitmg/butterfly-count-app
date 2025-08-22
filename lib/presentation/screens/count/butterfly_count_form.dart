@@ -7,14 +7,17 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:butterfly_counts/data/local/hive_service.dart';
 import 'package:http/http.dart' as http; // For NetworkException check
 
 //Data models and providers
 import 'package:butterfly_counts/data/models/count_model.dart';
 import 'package:butterfly_counts/data/models/observation.dart';
 import 'package:butterfly_counts/data/models/taxa.dart';
+
 import 'package:butterfly_counts/providers/api_providers.dart';
 import 'package:butterfly_counts/providers/app_preferences_provider.dart';
+
 import 'package:butterfly_counts/utils/snackbar_helper.dart';
 import 'package:butterfly_counts/core/app_colors.dart';
 
@@ -68,7 +71,7 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
 
   static const String _inProgressCountBox = 'inProgressCountBox';
   static const String _inProgressCountKey = 'inProgressCount';
-  static const String _pendingSubmissionsBox = 'pendingSubmissionsBox';
+  // static const String _pendingSubmissionsBox = 'pendingSubmissionsBox';
 
   bool _hasChanges = false;
 
@@ -91,13 +94,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     super.initState();
     openAccess = ref.read(openAccessPreferenceProvider);
     _getLocation(); // Fetch initial location on form load
-    _startTimer();
-
     _loadFormState();
+
+    _startTimer();// The timer should start after state is potentially loaded
   }
 
-  Future<void> _saveFormState() async {
-    final Box box = await Hive.openBox(_inProgressCountBox);
+  Future<void> _saveFormState(HiveService hiveService) async {
     final countState = {
       'teamName': teamName,
       'selectedDate': selectedDate.toIso8601String(),
@@ -112,14 +114,15 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
       'comments': comments,
       'observations': observations.map((o) => o.toJson()).toList(),
     };
-    await box.put(_inProgressCountKey, countState);
-    await box.close();
+    await hiveService.saveInProgressCount(_inProgressCountKey, countState);
     if (kDebugMode) print('Form state saved to Hive.');
   }
 
+
   Future<void> _loadFormState() async {
-    final Box box = await Hive.openBox(_inProgressCountBox);
-    final savedState = box.get(_inProgressCountKey);
+    final hiveService = ref.read(hiveServiceProvider); // Get HiveService via Riverpod
+    final savedState = await hiveService.loadInProgressCount(_inProgressCountKey); // Use HiveService method
+    
     if (savedState != null) {
       if (mounted) {
         setState(() {
@@ -158,13 +161,10 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
         );
       }
     }
-    await box.close();
   }
 
-  Future<void> _clearSavedState() async {
-    final Box box = await Hive.openBox(_inProgressCountBox);
-    await box.delete(_inProgressCountKey);
-    await box.close();
+  Future<void> _clearSavedState(HiveService hiveService) async {
+    await hiveService.clearInProgressCount(_inProgressCountKey);
     if (kDebugMode) print('Form state cleared from Hive.');
   }
 
@@ -199,11 +199,12 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     _placeNameController.dispose();
     super.dispose();
 
+    final hiveService = ref.read(hiveServiceProvider);
     if (_hasChanges) {
-      _saveFormState();
+      _saveFormState(hiveService);
     }
 
-    widget.onUnsavedChanges(false);
+    // widget.onUnsavedChanges(false);
   }
 
   // --- Callbacks to update state from child pages ---
@@ -386,12 +387,11 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
   }
 
   // Save the form to a local queue and show a corresponding snackbar
-  Future<void> _saveOfflineSubmission(CountModel countData) async {
-    final hiveService = ref.read(hiveServiceProvider);
+  Future<void> _saveOfflineSubmission(HiveService hiveService, CountModel countData) async {
     await hiveService.savePendingSubmission(
       countData,
     ); // Assumes this method exists
-    _clearSavedState();
+    _clearSavedState(hiveService);
     widget.onSubmissionSuccess();
   }
 
@@ -488,35 +488,34 @@ class _ButterflyCountFormState extends ConsumerState<ButterflyCountForm> {
     }
 
     if (choice == SubmissionChoice.saveForLater) {
-      _saveOfflineSubmission(countData);
+      final hiveService = ref.read(hiveServiceProvider);
+      _saveOfflineSubmission(hiveService, countData);
       SnackBarHelper.showFloatingSnackBar(
         context,
         message: 'Count saved for later submission.',
         type: SnackBarType.info,
       );
-      _clearSavedState(); // Clear in-progress state
+      _clearSavedState(hiveService); // Clear in-progress state
       widget.onSubmissionSuccess(); // Navigate to home
       return;
     }
 
     // If choice is SubmissionChoice.submitNow
     try {
-      await countSubmissionNotifier.submitCountAndObservations(
-        countData: countData,
-      );
-
-      // On success
-      _clearSavedState();
+      await countSubmissionNotifier.submitCountAndObservations(countData: countData);
+      final hiveService = ref.read(hiveServiceProvider);
+      _clearSavedState(hiveService);
       widget.onSubmissionSuccess();
     } on http.ClientException catch (e) {
       if (kDebugMode) print('Network error: $e');
-      _saveOfflineSubmission(countData);
+      final hiveService = ref.read(hiveServiceProvider);
+      _saveOfflineSubmission(hiveService, countData);
       SnackBarHelper.showFloatingSnackBar(
         context,
         message: 'No network. Saved for later submission.',
         type: SnackBarType.warning,
       );
-      _clearSavedState(); // Clear in-progress state
+      _clearSavedState(hiveService); // Clear in-progress state
       widget.onSubmissionSuccess(); // Navigate to home
     } catch (e) {
       SnackBarHelper.showFloatingSnackBar(
